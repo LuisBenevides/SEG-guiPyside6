@@ -27,7 +27,7 @@ from PySide6 import QtCore, QtGui
 from PySide6.QtWidgets import (QApplication, QScrollArea,QHBoxLayout, QLabel,
                                QMainWindow, QPushButton, QSizePolicy,QMenu,
                                QVBoxLayout, QWidget,QDialog,QFileDialog, QSlider, QStyle, QToolBar,QMessageBox)
-from PySide6.QtGui import QImage,QPixmap,QPainter
+from PySide6.QtGui import QImage,QPixmap,QPainter,QScreen,QCursor
 from PySide6.QtCore import QDir,Qt
 from PySide6.QtPrintSupport import QPrinter,QPrintDialog
 
@@ -46,14 +46,22 @@ def dicom2array(dcm):
 class ImageViewer(QMainWindow):
     def __init__(self):
         super(ImageViewer, self).__init__()
-
         self.printer = QPrinter()
         self.scaleFactor = 0.0
-
+        
         self.imageLabel = QLabel()
         self.imageLabel.setBackgroundRole(QtGui.QPalette.Base)
         self.imageLabel.setSizePolicy(QSizePolicy.Ignored,
                 QSizePolicy.Ignored)
+        self.imageLabel.setAlignment(QtCore.Qt.AlignCenter)
+
+
+        cursor = Qt.CrossCursor
+        self.imageLabel.setCursor(cursor)
+        
+
+        self.setMinimumHeight(600)
+        self.setMinimumWidth(600)
         self.imageLabel.setScaledContents(True)
 
         self.scrollArea = QScrollArea()
@@ -63,9 +71,10 @@ class ImageViewer(QMainWindow):
 
         self.createActions()
         self.createMenus()
-
-        self.setWindowTitle("Image Viewer")
-        self.resize(500, 400)
+        self.setGeometry(800,800,800,800)
+       
+        self.setWindowTitle("- LAMAC -")
+        #self.resize(500, 400)
 
     def open(self):
         fileName,_ = QFileDialog.getOpenFileName(self, "Open File",
@@ -78,13 +87,12 @@ class ImageViewer(QMainWindow):
         if fileName:
             image = QImage(fileName)
             if image.isNull():
-                QMessageBox.information(self, "Image Viewer",
+                QMessageBox.information(self, "Image",
                         "Cannot load %s." % fileName)
                 return
 
             self.imageLabel.setPixmap(QPixmap.fromImage(image))
             self.scaleFactor = 1.0
-
             self.printAct.setEnabled(True)
             self.fitToWindowAct.setEnabled(True)
             self.updateActions()
@@ -120,6 +128,8 @@ class ImageViewer(QMainWindow):
             self.normalSize()
 
         self.updateActions()
+    def HistMethod(self):
+        print("teste")
 
     def about(self):
         QMessageBox.about(self, "About Image Viewer",
@@ -160,6 +170,10 @@ class ImageViewer(QMainWindow):
                 enabled=False, checkable=True, shortcut="Ctrl+F",
                 triggered=self.fitToWindow)
 
+        self.HistMethod = QtGui.QAction("&HistMethod", self,
+                enabled=False, checkable=False,
+                triggered=self.HistMethod)
+
         self.aboutAct = QtGui.QAction("&About", self, triggered=self.about)
 
         self.aboutQtAct = QtGui.QAction("About &Qt", self,
@@ -176,6 +190,7 @@ class ImageViewer(QMainWindow):
         self.viewMenu.addAction(self.zoomInAct)
         self.viewMenu.addAction(self.zoomOutAct)
         self.viewMenu.addAction(self.normalSizeAct)
+        self.viewMenu.addAction(self.HistMethod)
         self.viewMenu.addSeparator()
         self.viewMenu.addAction(self.fitToWindowAct)
 
@@ -214,4 +229,6 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     imageViewer = ImageViewer()
     imageViewer.show()
+ 
+
     sys.exit(app.exec_())#!/usr/bin/env python
