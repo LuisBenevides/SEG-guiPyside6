@@ -24,23 +24,20 @@
 #############################################################################
 
 from PySide6 import QtCore, QtGui
-from PySide6.QtWidgets import (QApplication, QScrollArea,QHBoxLayout, QLabel,
-                               QMainWindow, QPushButton, QSizePolicy,QMenu,
-                               QVBoxLayout, QWidget,QDialog,QFileDialog, QSlider, QStyle, QToolBar,QMessageBox)
-from PySide6.QtGui import QImage,QPixmap,QPainter,QScreen,QCursor
-from PySide6.QtCore import QDir,Qt
-from PySide6.QtPrintSupport import QPrinter,QPrintDialog
-
+from PySide6.QtWidgets import *
+from PySide6.QtGui import *
+from PySide6.QtCore import *
+from PySide6.QtPrintSupport import *
+from skimage import data, img_as_float
+from skimage import exposure
 import pydicom
 from pydicom.data import get_testdata_files
 import numpy as np
 from skimage.io import imsave
-
+fileName_global = ""
 def dicom2array(dcm):
     img_raw = np.float64(dcm.pixel_array)
     output = np.array( dcm.RescaleSlope * img_raw + dcm.RescaleIntercept, dtype=int )
-    print('funcion')
-    print(output)
     return output
 
 class ImageViewer(QMainWindow):
@@ -49,12 +46,11 @@ class ImageViewer(QMainWindow):
         self.printer = QPrinter()
         self.scaleFactor = 0.0
         
-        self.imageLabel = QLabel()
+        self.imageLabel = QLabel() 
         self.imageLabel.setBackgroundRole(QtGui.QPalette.Base)
         self.imageLabel.setSizePolicy(QSizePolicy.Ignored,
                 QSizePolicy.Ignored)
-        self.imageLabel.setAlignment(QtCore.Qt.AlignCenter)
-
+        self.imageLabel.setAlignment(QtCore.Qt.AlignVCenter)
 
         cursor = Qt.CrossCursor
         self.imageLabel.setCursor(cursor)
@@ -62,6 +58,8 @@ class ImageViewer(QMainWindow):
 
         self.setMinimumHeight(600)
         self.setMinimumWidth(600)
+        self.setMaximumHeight(800)
+        self.setMaximumWidth(800)
         self.imageLabel.setScaledContents(True)
 
         self.scrollArea = QScrollArea()
@@ -71,35 +69,41 @@ class ImageViewer(QMainWindow):
 
         self.createActions()
         self.createMenus()
-        self.setGeometry(800,800,800,800)
-       
+        self.setGeometry(600,600,600,600)
         self.setWindowTitle("- LAMAC -")
-        #self.resize(500, 400)
 
     def open(self):
-        fileName,_ = QFileDialog.getOpenFileName(self, "Open File",
-                QDir.currentPath())
-        #convert dicom in png to read
-        cvImg = dicom2array(pydicom.dcmread(fileName, force = True))
+        global fileName_global 
+        fileName_global = self.pathFile()
+        cvImg = dicom2array(pydicom.dcmread(fileName_global , force = True))
         imsave('./temp1.png',cvImg)
         fileName="./temp1.png"
         print(fileName)
         if fileName:
-            image = QImage(fileName)
-            if image.isNull():
-                QMessageBox.information(self, "Image",
-                        "Cannot load %s." % fileName)
-                return
+           self.view(fileName)
 
-            self.imageLabel.setPixmap(QPixmap.fromImage(image))
-            self.scaleFactor = 1.0
-            self.printAct.setEnabled(True)
-            self.fitToWindowAct.setEnabled(True)
-            self.updateActions()
+    def pathFile(self):
+        fileName_global,_ = QFileDialog.getOpenFileName(self, "Open File",
+                QDir.currentPath(),filter ="DICOM (*.dcm *.)")
+        return fileName_global
 
-            if not self.fitToWindowAct.isChecked():
-                self.imageLabel.adjustSize()
+    def view(self,fileName): 
+        image = QImage(fileName)
+        print('teste')
+        print(image)
+        if image.isNull():
+            QMessageBox.information(self, "Image",
+                    "Cannot load %s." % fileName)
+            return
+        self.imageLabel.setPixmap(QPixmap.fromImage(image))
+        self.scaleFactor = 1.0
+        self.printAct.setEnabled(True)
+        self.fitToWindowAct.setEnabled(True)
 
+        self.imageLabel.setAlignment(Qt.AlignCenter)
+        self.updateActions()
+        if not self.fitToWindowAct.isChecked():
+            self.imageLabel.adjustSize()
     def print_(self):
         dialog = QPrintDialog(self.printer, self)
         if dialog.exec_():
@@ -128,8 +132,17 @@ class ImageViewer(QMainWindow):
             self.normalSize()
 
         self.updateActions()
+    
     def HistMethod(self):
-        print("teste")
+        # Equalization
+        print('A')
+        print(fileName_global)
+        image = dicom2array(pydicom.dcmread(fileName_global , force = True))
+        print('v')
+        img_eq = exposure.equalize_hist(image)
+        imsave('./tempH.png',img_eq)
+        fileName="./tempH.png"
+        self.view(fileName)
 
     def about(self):
         QMessageBox.about(self, "About Image Viewer",
@@ -170,7 +183,7 @@ class ImageViewer(QMainWindow):
                 enabled=False, checkable=True, shortcut="Ctrl+F",
                 triggered=self.fitToWindow)
 
-        self.HistMethod = QtGui.QAction("&HistMethod", self,
+        self.HistMethodAct = QtGui.QAction("&HistMethod", self,
                 enabled=False, checkable=False,
                 triggered=self.HistMethod)
 
@@ -190,7 +203,7 @@ class ImageViewer(QMainWindow):
         self.viewMenu.addAction(self.zoomInAct)
         self.viewMenu.addAction(self.zoomOutAct)
         self.viewMenu.addAction(self.normalSizeAct)
-        self.viewMenu.addAction(self.HistMethod)
+        self.viewMenu.addAction(self.HistMethodAct)
         self.viewMenu.addSeparator()
         self.viewMenu.addAction(self.fitToWindowAct)
 
@@ -206,6 +219,7 @@ class ImageViewer(QMainWindow):
         self.zoomInAct.setEnabled(not self.fitToWindowAct.isChecked())
         self.zoomOutAct.setEnabled(not self.fitToWindowAct.isChecked())
         self.normalSizeAct.setEnabled(not self.fitToWindowAct.isChecked())
+        self.HistMethodAct.setEnabled(not self.fitToWindowAct.isChecked())
 
     def scaleImage(self, factor):
         self.scaleFactor *= factor
