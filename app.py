@@ -27,7 +27,6 @@ from PySide6 import QtCore, QtGui
 from PySide6.QtWidgets import *
 from PySide6.QtGui import *
 from PySide6.QtCore import *
-from PySide6.QtPrintSupport import *
 from skimage import data, img_as_float
 from skimage import exposure
 import pydicom
@@ -35,6 +34,38 @@ from pydicom.data import get_testdata_files
 import numpy as np
 from skimage.io import imsave
 fileName_global = ""
+
+class MyScrollArea(QScrollArea):
+    def __init__(self, imageLabel):
+        super().__init__()
+        self.setWidget(imageLabel)
+        self.myImageWidget = imageLabel
+        self.oldScale = 1
+        self.newScale = 1
+        imageLabel.setScaledContents(True)
+    def wheelEvent(self, event) -> None:
+        if event.angleDelta().y() < 0:
+            # zoom out
+            self.newScale = 0.8
+        else:
+            # zoom in
+            self.newScale = 1.25
+
+        widgetPos = self.myImageWidget.mapFrom(self, event.position())
+
+        # resize image
+        self.myImageWidget.resize(self.myImageWidget.size() * self.newScale)
+
+        delta = widgetPos * self.newScale - widgetPos
+        self.horizontalScrollBar().setValue(
+            self.horizontalScrollBar().value() + delta.x())
+        self.verticalScrollBar().setValue(
+            self.verticalScrollBar().value() + delta.y())
+        
+        self.oldScale = self.newScale
+
+
+    
 def dicom2array(dcm):
     img_raw = np.float64(dcm.pixel_array)
     output = np.array( dcm.RescaleSlope * img_raw + dcm.RescaleIntercept, dtype=int )
@@ -43,28 +74,38 @@ def dicom2array(dcm):
 class ImageViewer(QMainWindow):
     def __init__(self):
         super(ImageViewer, self).__init__()
-        self.printer = QPrinter()
-        self.scaleFactor = 0.0
-        
+        # self.scaleFactor = 0.0
+      
         self.imageLabel = QLabel() 
-        self.imageLabel.setBackgroundRole(QtGui.QPalette.Base)
-        self.imageLabel.setSizePolicy(QSizePolicy.Ignored,
-                QSizePolicy.Ignored)
+        self.imageLabel.installEventFilter(self)
+            
+        # self.imageLabel.setBackgroundRole(QtGui.QPalette.Base)
+        # self.imageLabel.setSizePolicy(QSizePolicy.Ignored,
+        #         QSizePolicy.Ignored)
         self.imageLabel.setAlignment(QtCore.Qt.AlignVCenter)
 
         cursor = Qt.CrossCursor
         self.imageLabel.setCursor(cursor)
         
 
-        self.setMinimumHeight(600)
-        self.setMinimumWidth(600)
-        self.setMaximumHeight(800)
-        self.setMaximumWidth(800)
-        self.imageLabel.setScaledContents(True)
+        # self.setMinimumHeight(600)
+        # self.setMinimumWidth(600)
+        # self.setMaximumHeight(800)
+        # self.setMaximumWidth(800)
+        
 
-        self.scrollArea = QScrollArea()
-        self.scrollArea.setBackgroundRole(QtGui.QPalette.Dark)
-        self.scrollArea.setWidget(self.imageLabel)
+        # self.scrollArea = QScrollArea()
+        # self.scrollArea.setBackgroundRole(QtGui.QPalette.Dark)
+        # self.scrollArea.setWidget(self.imageLabel)
+        self.scrollArea = MyScrollArea(self.imageLabel)
+
+        # insert to layout
+        self.layout = QVBoxLayout()
+        self.layout.addWidget(self.scrollArea)
+        self.setLayout(self.layout)
+
+
+
         self.setCentralWidget(self.scrollArea)
 
         self.createActions()
@@ -78,7 +119,6 @@ class ImageViewer(QMainWindow):
         cvImg = dicom2array(pydicom.dcmread(fileName_global , force = True))
         imsave('./temp1.png',cvImg)
         fileName="./temp1.png"
-        print(fileName)
         if fileName:
            self.view(fileName)
 
@@ -89,31 +129,16 @@ class ImageViewer(QMainWindow):
 
     def view(self,fileName): 
         image = QImage(fileName)
-        print('teste')
-        print(image)
         if image.isNull():
             QMessageBox.information(self, "Image",
                     "Cannot load %s." % fileName)
             return
         self.imageLabel.setPixmap(QPixmap.fromImage(image))
         self.scaleFactor = 1.0
-        self.printAct.setEnabled(True)
         self.fitToWindowAct.setEnabled(True)
-
-        self.imageLabel.setAlignment(Qt.AlignCenter)
         self.updateActions()
         if not self.fitToWindowAct.isChecked():
             self.imageLabel.adjustSize()
-    def print_(self):
-        dialog = QPrintDialog(self.printer, self)
-        if dialog.exec_():
-            painter = QPainter(self.printer)
-            rect = painter.viewport()
-            size = self.imageLabel.pixmap().size()
-            size.scale(rect.size(), Qt.KeepAspectRatio)
-            painter.setViewport(rect.x(), rect.y(), size.width(), size.height())
-            painter.setWindow(self.imageLabel.pixmap().rect())
-            painter.drawPixmap(0, 0, self.imageLabel.pixmap())
 
     def zoomIn(self):
         self.scaleImage(1.25)
@@ -135,10 +160,8 @@ class ImageViewer(QMainWindow):
     
     def HistMethod(self):
         # Equalization
-        print('A')
         print(fileName_global)
         image = dicom2array(pydicom.dcmread(fileName_global , force = True))
-        print('v')
         img_eq = exposure.equalize_hist(image)
         imsave('./tempH.png',img_eq)
         fileName="./tempH.png"
@@ -163,10 +186,6 @@ class ImageViewer(QMainWindow):
     def createActions(self):
         self.openAct = QtGui.QAction("&Open...", self, shortcut="Ctrl+O",
                 triggered=self.open)
-
-        self.printAct = QtGui.QAction("&Print...", self, shortcut="Ctrl+P",
-                enabled=False, triggered=self.print_)
-
         self.exitAct = QtGui.QAction("E&xit", self, shortcut="Ctrl+Q",
                 triggered=self.close)
 
@@ -195,7 +214,6 @@ class ImageViewer(QMainWindow):
     def createMenus(self):
         self.fileMenu = QMenu("&File", self)
         self.fileMenu.addAction(self.openAct)
-        self.fileMenu.addAction(self.printAct)
         self.fileMenu.addSeparator()
         self.fileMenu.addAction(self.exitAct)
 
