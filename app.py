@@ -32,8 +32,11 @@ from skimage import exposure
 import pydicom
 from pydicom.data import get_testdata_files
 import numpy as np
-from skimage.io import imsave
+from skimage.io import *
+import cv2 as cv
 fileName_global = ""
+
+varpos = 1
 
 class MyScrollArea(QScrollArea):
     def __init__(self, imageLabel):
@@ -43,14 +46,22 @@ class MyScrollArea(QScrollArea):
         self.oldScale = 1
         self.newScale = 1
         imageLabel.setScaledContents(True)
+       
     def wheelEvent(self, event) -> None:
+        global varpos
+        
         if event.angleDelta().y() < 0:
             # zoom out
-            self.newScale = 0.8
+            self.newScale = 0.75
+
         else:
             # zoom in
             self.newScale = 1.25
-
+        
+        #global var
+        varpos= varpos*(self.newScale)
+        #####
+        
         widgetPos = self.myImageWidget.mapFrom(self, event.position())
 
         # resize image
@@ -64,7 +75,69 @@ class MyScrollArea(QScrollArea):
         
         self.oldScale = self.newScale
 
+COLORS = [
+# https://lospec.com/palette-list/6-bit-12-colour-challenge
+    '#ffeeb9',
+    '#bd4b4b',
+    '#442242',
+    '#1ab11d',
+    '#286440',
+    '#133542',
+    '#675c85',
+    '#251e3c',
+    '#1e132c',
+    '#b5b4d3',
+    '#6b6a7c',
+    '#232328'
+]
 
+
+class QPaletteButton(QPushButton):
+
+    def __init__(self, color):
+        super().__init__()
+        self.setFixedSize(QtCore.QSize(50,50))
+        self.color = color
+        self.setStyleSheet("background-color: %s;" % color)
+
+
+class Canvas(QLabel):
+
+    def __init__(self,image_dir):
+        super().__init__()
+        image = QImage(image_dir)
+        pixmap = QPixmap(QPixmap.fromImage(image))
+        self.setPixmap(pixmap)
+
+        self.last_x, self.last_y = None, None
+        self.pen_color = QColor('#000000')
+
+    def set_pen_color(self, c):
+        self.pen_color = QColor(c)
+
+    def mouseMoveEvent(self, e):
+        if self.last_x is None: # First event.
+            self.last_x = e.x()
+            self.last_y = e.y()
+            return # Ignore the first time.
+
+        canvas = self.pixmap()
+        painter = QPainter(canvas)
+        p = painter.pen()
+        p.setWidth(3)
+        p.setColor(self.pen_color)
+        painter.setPen(p)
+        painter.drawPoint( e.x()/varpos, e.y()/varpos)
+        painter.end()
+        self.setPixmap(canvas)
+
+        # Update the origin for next time.
+        self.last_x = e.x()
+        self.last_y = e.y()
+
+    def mouseReleaseEvent(self, e):
+        self.last_x = None
+        self.last_y = None
     
 def dicom2array(dcm):
     img_raw = np.float64(dcm.pixel_array)
@@ -74,44 +147,77 @@ def dicom2array(dcm):
 class ImageViewer(QMainWindow):
     def __init__(self):
         super(ImageViewer, self).__init__()
-        # self.scaleFactor = 0.0
-      
-        self.imageLabel = QLabel() 
+        self.bar = self.addToolBar("Menu")
+        self.bar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        
+        self.color_action = QAction(self)
+        self.color_action.triggered.connect(self.on_color_clicked)
+        self.bar.addAction(self.color_action)
+        self.set_color(Qt.black)
+        # self.imageLabel = QLabel() 
+        self.imageLabel = Canvas(fileName_global)
         self.imageLabel.installEventFilter(self)
-            
-        # self.imageLabel.setBackgroundRole(QtGui.QPalette.Base)
-        # self.imageLabel.setSizePolicy(QSizePolicy.Ignored,
-        #         QSizePolicy.Ignored)
-        self.imageLabel.setAlignment(QtCore.Qt.AlignVCenter)
+        # self.imageLabel.setAlignment(QtCore.Qt.AlignVCenter)
 
         cursor = Qt.CrossCursor
         self.imageLabel.setCursor(cursor)
-        
-
-        # self.setMinimumHeight(600)
-        # self.setMinimumWidth(600)
-        # self.setMaximumHeight(800)
-        # self.setMaximumWidth(800)
-        
-
-        # self.scrollArea = QScrollArea()
-        # self.scrollArea.setBackgroundRole(QtGui.QPalette.Dark)
-        # self.scrollArea.setWidget(self.imageLabel)
         self.scrollArea = MyScrollArea(self.imageLabel)
 
-        # insert to layout
+       
+
+        self.setCentralWidget(self.scrollArea)
+
+
+        ################################
+        self.layout = QHBoxLayout()
+
+        self.layout.addWidget(self.scrollArea)
+
+
         self.layout = QVBoxLayout()
+       
         self.layout.addWidget(self.scrollArea)
         self.setLayout(self.layout)
 
+        # self.layout.addWidget(self.imageLabel)
+
+        # palette = QHBoxLayout()
+        # self.add_palette_buttons(palette)
+        # self.layout.addLayout(palette)
+
+        w = QWidget()
+        w.setLayout(self.layout)
+        self.setCentralWidget(w)
 
 
-        self.setCentralWidget(self.scrollArea)
+        ###################################
+
 
         self.createActions()
         self.createMenus()
         self.setGeometry(600,600,600,600)
         self.setWindowTitle("- LAMAC -")
+
+    @Slot()
+    def on_color_clicked(self,layout):
+
+        color = QColorDialog.getColor(Qt.black, self)
+        if color:
+            self.set_color(color)
+    def set_color(self, color: QColor = Qt.black):
+        # Create color icon
+        print("teste")
+        pix_icon = QPixmap(20, 20)
+        pix_icon.fill(color)
+
+        self.color_action.setIcon(QIcon(pix_icon))
+        # self.imageLabel.set_pen_color(color)
+        # self.color_action.setText(QColor(color).name())
+    def add_palette_buttons(self, layout):
+        for c in COLORS:
+            b = QPaletteButton(c)
+            b.pressed.connect(lambda c=c: self.imageLabel.set_pen_color(c))
+            layout.addWidget(b)
 
     def open(self):
         global fileName_global 
@@ -166,6 +272,15 @@ class ImageViewer(QMainWindow):
         imsave('./tempH.png',img_eq)
         fileName="./tempH.png"
         self.view(fileName)
+    def HistMethodCLAHE(self):
+        image = pydicom.dcmread(fileName_global , force = True)
+        image = image.pixel_array
+        #image = imread(fileName_global)
+        clahe= cv.createCLAHE(clipLimit=0.3,tileGridSize=(8,8))
+        img_clahe = clahe.apply(image)
+        imsave('./tempHC.png',img_clahe)
+        fileName="./tempHC.png"
+        self.view(fileName)
 
     def about(self):
         QMessageBox.about(self, "About Image Viewer",
@@ -205,7 +320,9 @@ class ImageViewer(QMainWindow):
         self.HistMethodAct = QtGui.QAction("&HistMethod", self,
                 enabled=False, checkable=False,
                 triggered=self.HistMethod)
-
+        self.HistMethodCLAHEAct = QtGui.QAction("&Hist CLAHE", self,
+                enabled=False, checkable=False,
+                triggered=self.HistMethodCLAHE)
         self.aboutAct = QtGui.QAction("&About", self, triggered=self.about)
 
         self.aboutQtAct = QtGui.QAction("About &Qt", self,
@@ -222,6 +339,7 @@ class ImageViewer(QMainWindow):
         self.viewMenu.addAction(self.zoomOutAct)
         self.viewMenu.addAction(self.normalSizeAct)
         self.viewMenu.addAction(self.HistMethodAct)
+        self.viewMenu.addAction(self.HistMethodCLAHEAct)
         self.viewMenu.addSeparator()
         self.viewMenu.addAction(self.fitToWindowAct)
 
@@ -238,6 +356,7 @@ class ImageViewer(QMainWindow):
         self.zoomOutAct.setEnabled(not self.fitToWindowAct.isChecked())
         self.normalSizeAct.setEnabled(not self.fitToWindowAct.isChecked())
         self.HistMethodAct.setEnabled(not self.fitToWindowAct.isChecked())
+        self.HistMethodCLAHEAct.setEnabled(not self.fitToWindowAct.isChecked())
 
     def scaleImage(self, factor):
         self.scaleFactor *= factor
