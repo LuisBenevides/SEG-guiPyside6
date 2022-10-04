@@ -33,11 +33,11 @@ import pydicom
 from pydicom.data import get_testdata_files
 import numpy as np
 from skimage.io import *
-import cv2 as cv
+# import cv2 as cv
 
 fileName_global = ""
 
-varpos = 1
+varpos = 1.0
 
 COLORS = [
 # https://lospec.com/palette-list/6-bit-12-colour-challenge
@@ -154,6 +154,7 @@ class Canvas(QLabel):
 class ImageViewer(QMainWindow):
     def __init__(self):
         super(ImageViewer, self).__init__()
+
         self.bar = self.addToolBar("Menu")
         self.bar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         
@@ -195,8 +196,8 @@ class ImageViewer(QMainWindow):
         self.layout.addLayout(layout3)
         # self.layout.addWidget(self.imageLabel)
 
-        # palette = QHBoxLayout()
-        # self.add_palette_buttons(palette)
+        palette = QHBoxLayout()
+        self.add_palette_buttons(palette)
    
 
         w = QWidget()
@@ -289,15 +290,17 @@ class ImageViewer(QMainWindow):
     def HistMethodCLAHE(self):
         image = pydicom.dcmread(fileName_global , force = True)
         image = image.pixel_array
+        img_adapteq = exposure.equalize_adapthist(image, clip_limit=0.03)
+        
 
-        image = image / image.max() #normalizes image in range 0 - 255
-        image = 255 * image
-        image = image.astype(np.uint8)
+        # image = image / image.max() #normalizes image in range 0 - 255
+        # image = 255 * image
+        # 
 
         #image = imread(fileName_global)
-        clahe= cv.createCLAHE(clipLimit=2.0,tileGridSize=(8,8))
-        img_clahe = clahe.apply(image)
-        imsave('./tempHC.png',img_clahe)
+        # clahe= cv.createCLAHE(clipLimit=2.0,tileGridSize=(8,8))
+        # img_clahe = clahe.apply(image)
+        imsave('./tempHC.png',img_adapteq)
         fileName="./tempHC.png"
         self.view(fileName)
 
