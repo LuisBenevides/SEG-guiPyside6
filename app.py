@@ -34,9 +34,31 @@ from pydicom.data import get_testdata_files
 import numpy as np
 from skimage.io import *
 import cv2 as cv
+
 fileName_global = ""
 
 varpos = 1
+
+COLORS = [
+# https://lospec.com/palette-list/6-bit-12-colour-challenge
+    '#ffeeb9',
+    '#bd4b4b',
+    '#442242',
+    '#1ab11d',
+    '#286440',
+    '#133542',
+    '#675c85',
+    '#251e3c',
+    '#1e132c',
+    '#b5b4d3',
+    '#6b6a7c',
+    '#232328'
+]
+
+def dicom2array(dcm):
+    img_raw = np.float64(dcm.pixel_array)
+    output = np.array( dcm.RescaleSlope * img_raw + dcm.RescaleIntercept, dtype=int )
+    return output
 
 class MyScrollArea(QScrollArea):
     def __init__(self, imageLabel):
@@ -75,21 +97,6 @@ class MyScrollArea(QScrollArea):
         
         self.oldScale = self.newScale
 
-COLORS = [
-# https://lospec.com/palette-list/6-bit-12-colour-challenge
-    '#ffeeb9',
-    '#bd4b4b',
-    '#442242',
-    '#1ab11d',
-    '#286440',
-    '#133542',
-    '#675c85',
-    '#251e3c',
-    '#1e132c',
-    '#b5b4d3',
-    '#6b6a7c',
-    '#232328'
-]
 
 
 class QPaletteButton(QPushButton):
@@ -127,7 +134,10 @@ class Canvas(QLabel):
         p.setWidth(3)
         p.setColor(self.pen_color)
         painter.setPen(p)
-        painter.drawPoint( e.x()/varpos, e.y()/varpos)
+        if (e.x() > 0 and  e.y() > 0):
+            painter.drawPoint( e.x()/varpos, e.y()/varpos)
+            print(e.x()/varpos )
+            print(e.y()/varpos)
         painter.end()
         self.setPixmap(canvas)
 
@@ -139,10 +149,7 @@ class Canvas(QLabel):
         self.last_x = None
         self.last_y = None
     
-def dicom2array(dcm):
-    img_raw = np.float64(dcm.pixel_array)
-    output = np.array( dcm.RescaleSlope * img_raw + dcm.RescaleIntercept, dtype=int )
-    return output
+
 
 class ImageViewer(QMainWindow):
     def __init__(self):
@@ -156,6 +163,7 @@ class ImageViewer(QMainWindow):
         self.set_color(Qt.black)
         # self.imageLabel = QLabel() 
         self.imageLabel = Canvas(fileName_global)
+        self.imageL2 = Canvas('./tempHC.png')
         self.imageLabel.installEventFilter(self)
         # self.imageLabel.setAlignment(QtCore.Qt.AlignVCenter)
 
@@ -164,26 +172,32 @@ class ImageViewer(QMainWindow):
         self.scrollArea = MyScrollArea(self.imageLabel)
 
        
-
+        buttonSP = QPushButton("Press Me!")
+        buttonSP.setCheckable(True)
+        buttonSP.clicked.connect(self.the_button_was_clicked)
+        
         self.setCentralWidget(self.scrollArea)
 
 
         ################################
         self.layout = QHBoxLayout()
+        layout2 = QVBoxLayout()
+        layout3 = QVBoxLayout()
+        self.layout.setContentsMargins(0,0,0,0)
+        self.layout.setSpacing(20)
 
-        self.layout.addWidget(self.scrollArea)
+        layout2.addWidget(self.scrollArea)
+        layout2.addWidget(buttonSP)
 
+        self.layout.addLayout(layout2)
+        layout3.addWidget(self.imageL2)
 
-        self.layout = QVBoxLayout()
-       
-        self.layout.addWidget(self.scrollArea)
-        self.setLayout(self.layout)
-
+        self.layout.addLayout(layout3)
         # self.layout.addWidget(self.imageLabel)
 
         # palette = QHBoxLayout()
         # self.add_palette_buttons(palette)
-        # self.layout.addLayout(palette)
+   
 
         w = QWidget()
         w.setLayout(self.layout)
@@ -275,40 +289,34 @@ class ImageViewer(QMainWindow):
     def HistMethodCLAHE(self):
         image = pydicom.dcmread(fileName_global , force = True)
         image = image.pixel_array
+
+        image = image / image.max() #normalizes image in range 0 - 255
+        image = 255 * image
+        image = image.astype(np.uint8)
+
         #image = imread(fileName_global)
-        clahe= cv.createCLAHE(clipLimit=0.3,tileGridSize=(8,8))
+        clahe= cv.createCLAHE(clipLimit=2.0,tileGridSize=(8,8))
         img_clahe = clahe.apply(image)
         imsave('./tempHC.png',img_clahe)
         fileName="./tempHC.png"
         self.view(fileName)
 
     def about(self):
-        QMessageBox.about(self, "About Image Viewer",
-                "<p>The <b>Image Viewer</b> example shows how to combine "
-                "QLabel and QScrollArea to display an image. QLabel is "
-                "typically used for displaying text, but it can also display "
-                "an image. QScrollArea provides a scrolling view around "
-                "another widget. If the child widget exceeds the size of the "
-                "frame, QScrollArea automatically provides scroll bars.</p>"
-                "<p>The example demonstrates how QLabel's ability to scale "
-                "its contents (QLabel.scaledContents), and QScrollArea's "
-                "ability to automatically resize its contents "
-                "(QScrollArea.widgetResizable), can be used to implement "
-                "zooming and scaling features.</p>"
-                "<p>In addition the example shows how to use QPainter to "
-                "print an image.</p>")
+        QMessageBox.about(self, "LAMAC",
+                "<p>Segmentador Manual !!! </p>")
 
+    def the_button_was_clicked(self):
+        print("Clicked!")
+    
     def createActions(self):
         self.openAct = QtGui.QAction("&Open...", self, shortcut="Ctrl+O",
                 triggered=self.open)
         self.exitAct = QtGui.QAction("E&xit", self, shortcut="Ctrl+Q",
                 triggered=self.close)
 
-        self.zoomInAct = QtGui.QAction("Zoom &In (25%)", self,
-                shortcut="Ctrl++", enabled=False, triggered=self.zoomIn)
+        #self.zoomInAct = QtGui.QAction("Zoom &In (25%)", self,shortcut="Ctrl++", enabled=False, triggered=self.zoomIn)
 
-        self.zoomOutAct = QtGui.QAction("Zoom &Out (25%)", self,
-                shortcut="Ctrl+-", enabled=False, triggered=self.zoomOut)
+        #self.zoomOutAct = QtGui.QAction("Zoom &Out (25%)", self, shortcut="Ctrl+-", enabled=False, triggered=self.zoomOut)
 
         self.normalSizeAct = QtGui.QAction("&Normal Size", self,
                 shortcut="Ctrl+S", enabled=False, triggered=self.normalSize)
@@ -335,8 +343,8 @@ class ImageViewer(QMainWindow):
         self.fileMenu.addAction(self.exitAct)
 
         self.viewMenu = QMenu("&View", self)
-        self.viewMenu.addAction(self.zoomInAct)
-        self.viewMenu.addAction(self.zoomOutAct)
+        #self.viewMenu.addAction(self.zoomInAct)
+        #self.viewMenu.addAction(self.zoomOutAct)
         self.viewMenu.addAction(self.normalSizeAct)
         self.viewMenu.addAction(self.HistMethodAct)
         self.viewMenu.addAction(self.HistMethodCLAHEAct)
@@ -352,8 +360,8 @@ class ImageViewer(QMainWindow):
         self.menuBar().addMenu(self.helpMenu)
 
     def updateActions(self):
-        self.zoomInAct.setEnabled(not self.fitToWindowAct.isChecked())
-        self.zoomOutAct.setEnabled(not self.fitToWindowAct.isChecked())
+        #self.zoomOutAct.setEnabled(not self.fitToWindowAct.isChecked())
+        #self.zoomInAct.setEnabled(not self.fitToWindowAct.isChecked())
         self.normalSizeAct.setEnabled(not self.fitToWindowAct.isChecked())
         self.HistMethodAct.setEnabled(not self.fitToWindowAct.isChecked())
         self.HistMethodCLAHEAct.setEnabled(not self.fitToWindowAct.isChecked())
@@ -365,8 +373,8 @@ class ImageViewer(QMainWindow):
         self.adjustScrollBar(self.scrollArea.horizontalScrollBar(), factor)
         self.adjustScrollBar(self.scrollArea.verticalScrollBar(), factor)
 
-        self.zoomInAct.setEnabled(self.scaleFactor < 3.0)
-        self.zoomOutAct.setEnabled(self.scaleFactor > 0.333)
+        #self.zoomOutAct.setEnabled(self.scaleFactor > 0.333)
+        #self.zoomInAct.setEnabled(self.scaleFactor < 3.0)
 
     def adjustScrollBar(self, scrollBar, factor):
         scrollBar.setValue(int(factor * scrollBar.value()
