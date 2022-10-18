@@ -29,14 +29,25 @@ from PySide6.QtGui import *
 from PySide6.QtCore import *
 from skimage import data, img_as_float
 from skimage import exposure
+from skimage import color
 import pydicom
 from pydicom.data import get_testdata_files
 import numpy as np
 from skimage.io import *
-# import cv2 as cv
+import cv2 as cv
+from PIL import ImageFile
+ImageFile.LOAD_TRUNCATED_IMAGES = True
+from skimage.segmentation import slic
+from skimage.segmentation import mark_boundaries
+import matplotlib.pyplot as plt
+from scipy.stats import norm
+from matplotlib import pyplot as plt
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_qt5agg import FigureCanvas
+from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 
+#fileName_global = "/home/thelmo/workspace/victor/SEG-guiPyside6-main/images/000100.dcm"
 fileName_global = ""
-
 varpos = 1.0
 
 COLORS = [
@@ -107,6 +118,65 @@ class QPaletteButton(QPushButton):
         self.color = color
         self.setStyleSheet("background-color: %s;" % color)
 
+class PlotWidget(QWidget):
+    def __init__(self, fileName_Plot):
+        super().__init__()    
+        print("-- IF out")
+        #  create widgets
+        self.view = FigureCanvas(Figure(figsize=(5, 3)))
+        self.axes = self.view.figure.subplots()
+        self.toolbar = NavigationToolbar2QT(self.view, self)
+        #  Create layout
+        vlayout = QVBoxLayout()
+        vlayout.addWidget(self.toolbar)
+        vlayout.addWidget(self.view)
+        self.setLayout(vlayout)
+        
+        self.on_change()
+
+    @Slot()
+    def on_change(self):
+        global fileName_global
+        print('ON CHANGE ----')
+        """ Update the plot with the current input values """
+        if fileName_global != '': 
+            self.dicom_image = dicom2array(pydicom.dcmread(fileName_global , force = True))
+
+        self.axes.clear()
+
+        if fileName_global != '': 
+            self.axes.imshow(self.dicom_image,cmap='gray')
+            self.view.draw()
+        
+
+class PlotWidgetOriginal(QWidget):
+    def __init__(self, fileName_Plot):
+        super().__init__()    
+        print("-- IF out")
+        #  create widgets
+        self.view = FigureCanvas(Figure(figsize=(5, 3)))
+        self.axes = self.view.figure.subplots()
+        self.toolbar = NavigationToolbar2QT(self.view, self)
+
+        vlayout = QVBoxLayout()
+        vlayout.addWidget(self.toolbar)
+        vlayout.addWidget(self.view)
+        self.setLayout(vlayout)
+
+        self.on_change()
+
+    @Slot()
+    def on_change(self):
+        global fileName_global
+        print('ON CHANGE ----')
+        """ Update the plot with the current input values """
+        if fileName_global != '': 
+            self.dicom_image = dicom2array(pydicom.dcmread(fileName_global , force = True))
+        self.axes.clear()
+
+        if fileName_global != '': 
+            self.axes.imshow(self.dicom_image,cmap='gray')
+            self.view.draw()
 
 class Canvas(QLabel):
 
@@ -167,16 +237,17 @@ class ImageViewer(QMainWindow):
         self.imageL2 = Canvas('./tempHC.png')
         self.imageLabel.installEventFilter(self)
         # self.imageLabel.setAlignment(QtCore.Qt.AlignVCenter)
-
+        self.plotwidget = PlotWidget(fileName_global)
+        self.plotwidget_original =PlotWidgetOriginal(fileName_global)
         cursor = Qt.CrossCursor
         self.imageLabel.setCursor(cursor)
         self.scrollArea = MyScrollArea(self.imageLabel)
 
        
-        buttonSP = QPushButton("Press Me!")
-        buttonSP.setCheckable(True)
-        buttonSP.clicked.connect(self.the_button_was_clicked)
-        
+        # buttonSP = QPushButton("Press Me!")
+        # buttonSP.setCheckable(True)
+        # buttonSP.clicked.connect(self.the_button_was_clicked)
+        # 
         self.setCentralWidget(self.scrollArea)
 
 
@@ -187,11 +258,10 @@ class ImageViewer(QMainWindow):
         self.layout.setContentsMargins(0,0,0,0)
         self.layout.setSpacing(20)
 
-        layout2.addWidget(self.scrollArea)
-        layout2.addWidget(buttonSP)
+        layout2.addWidget(self.plotwidget_original)
 
         self.layout.addLayout(layout2)
-        layout3.addWidget(self.imageL2)
+        layout3.addWidget(self.plotwidget)
 
         self.layout.addLayout(layout3)
         # self.layout.addWidget(self.imageLabel)
@@ -237,9 +307,11 @@ class ImageViewer(QMainWindow):
     def open(self):
         global fileName_global 
         fileName_global = self.pathFile()
-        cvImg = dicom2array(pydicom.dcmread(fileName_global , force = True))
-        imsave('./temp1.png',cvImg)
+        dicom_image = dicom2array(pydicom.dcmread(fileName_global , force = True))
+        imsave('./temp1.png', dicom_image)
         fileName="./temp1.png"
+        self.plotwidget_original.on_change()
+        self.plotwidget.on_change()
         if fileName:
            self.view(fileName)
 
@@ -284,32 +356,56 @@ class ImageViewer(QMainWindow):
         print(fileName_global)
         image = dicom2array(pydicom.dcmread(fileName_global , force = True))
         img_eq = exposure.equalize_hist(image)
-        imsave('./tempH.png',img_eq)
+        imsave('./tempH.png',(img_eq*255).astype(np.uint8))
         fileName="./tempH.png"
         self.view(fileName)
     def HistMethodCLAHE(self):
         image = pydicom.dcmread(fileName_global , force = True)
         image = image.pixel_array
-        img_adapteq = exposure.equalize_adapthist(image, clip_limit=0.03)
-        
 
-        # image = image / image.max() #normalizes image in range 0 - 255
-        # image = 255 * image
-        # 
+        image = image / image.max() #normalizes image in range 0 - 255
+        image = 255 * image
+        image = image.astype(np.uint8)
 
         #image = imread(fileName_global)
-        # clahe= cv.createCLAHE(clipLimit=2.0,tileGridSize=(8,8))
-        # img_clahe = clahe.apply(image)
-        imsave('./tempHC.png',img_adapteq)
+        clahe= cv.createCLAHE(clipLimit=0.3,tileGridSize=(8,8))
+        clahe= cv.createCLAHE(clipLimit=2.0,tileGridSize=(8,8))
+        img_clahe = clahe.apply(image)
+        imsave('./tempHC.png',img_clahe)
         fileName="./tempHC.png"
         self.view(fileName)
+        
+    def SuperPixel(self):
+        image = pydicom.dcmread(fileName_global , force = True)
+        image = image.pixel_array
+
+        image = image / image.max() #normalizes image in range 0 - 255
+        image = 255 * image
+        image = image.astype(np.uint8)
+        numSegments = 2000
+        sigma_slic = 1
+        compactness = 0.05
+        method = 'gaussian'
+        # apply SLIC and extract (approximately) the supplied number of segments
+        segments = slic(image, n_segments=numSegments, sigma=sigma_slic, \
+                multichannel=False, compactness=compactness, start_label=1)
+        imsave('./superpixel.png',segments)
+        fileName="./superpixel.png"
+        self.view(fileName)
+        # show the output of SLIC
+        fig = plt.figure("Superpixels -- %d segments" % (numSegments))
+        ax = fig.add_subplot(1, 1, 1)
+        ax.imshow(mark_boundaries(image, segments))
+        plt.axis("off")
+        # show the plots
+        plt.show()
 
     def about(self):
         QMessageBox.about(self, "LAMAC",
                 "<p>Segmentador Manual !!! </p>")
 
     def the_button_was_clicked(self):
-        print("Clicked!")
+        self.SuperPixel()
     
     def createActions(self):
         self.openAct = QtGui.QAction("&Open...", self, shortcut="Ctrl+O",
