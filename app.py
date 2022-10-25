@@ -31,23 +31,26 @@ from skimage import data, img_as_float
 from skimage import exposure
 from skimage import color
 import pydicom
+import pydicom as dicom
+from pydicom import dcmread
 from pydicom.data import get_testdata_files
 import numpy as np
 from skimage.io import *
 import cv2 as cv
 from PIL import ImageFile
-ImageFile.LOAD_TRUNCATED_IMAGES = True
+#ImageFile.LOAD_TRUNCATED_IMAGES = True
 from skimage.segmentation import slic
 from skimage.segmentation import mark_boundaries
+from skimage import exposure, img_as_ubyte
 import matplotlib.pyplot as plt
 from scipy.stats import norm
 from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
-
-#fileName_global = "/home/thelmo/workspace/victor/SEG-guiPyside6-main/images/000100.dcm"
-fileName_global = ""
+from functions import *
+fileName_global = "../tomografias/000100.dcm"
+#fileName_global = ""
 varpos = 1.0
 
 COLORS = [
@@ -69,6 +72,7 @@ COLORS = [
 def dicom2array(dcm):
     img_raw = np.float64(dcm.pixel_array)
     output = np.array( dcm.RescaleSlope * img_raw + dcm.RescaleIntercept, dtype=int )
+    print(output)
     return output
 
 class MyScrollArea(QScrollArea):
@@ -164,8 +168,61 @@ class PlotWidgetOriginal(QWidget):
         self.setLayout(vlayout)
 
         self.on_change()
+    def HistMethodClahe(self):
+        global fileName_global
+        print("ON Hist ----")
+        """ Update the plot with the current input values """
+        if fileName_global != '': 
+            self.dicom_image = dicom2array(pydicom.dcmread(fileName_global , force = True))
+            self.dicom_image = select_RoI(self.dicom_image)
+            # self.dicom_image = self.dicom_image.pixel_array
+            orig_min = self.dicom_image.min()
+            orig_max = self.dicom_image.max()
+            target_min = 0.0
+            target_max = 255.0
+            self.dicom_image = (self.dicom_image-orig_min)*((target_max- 
+            target_min)/(orig_max-orig_min))+target_min
+            image_uint8_by_function = self.dicom_image.astype(np.uint8)
 
-    @Slot()
+            print(image_uint8_by_function.max())
+            
+            # self.dicom_image = self.dicom_image / self.dicom_image.max() #normalizes image in range 0 - 255
+            # self.dicom_image = 255 * self.dicom_image
+            # self.dicom_image = self.dicom_image.astype(np.uint8)
+            #print(self.dicom_image.max())
+            
+            #self.dicom_image = img_as_ubyte(exposure.rescale_intensity(self.dicom_image))
+            
+        #clahe= cv.createCLAHE(clipLimit=0.03,tileGridSize=(8,8))
+        #img_adapteq = clahe.apply(self.dicom_image)
+
+        img_adapteq = exposure.equalize_adapthist(image_uint8_by_function, clip_limit=0.03)
+
+        self.axes.clear()
+        self.axes.imshow(img_adapteq,cmap='gray')
+        self.view.draw()
+    def SuperPixel(self):
+        if fileName_global != '': 
+            self.dicom_image = dicom2array(pydicom.dcmread(fileName_global , force = True))
+            self.dicom_image = select_RoI(self.dicom_image)
+            # self.dicom_image = self.dicom_image.pixel_array
+            orig_min = self.dicom_image.min()
+            orig_max = self.dicom_image.max()
+            target_min = 0.0
+            target_max = 255.0
+            self.dicom_image = (self.dicom_image-orig_min)*((target_max- 
+            target_min)/(orig_max-orig_min))+target_min
+            image_uint8_by_function = self.dicom_image.astype(np.uint8)
+        sigma_slic =1
+        compactness = 0.05
+        numSegments = 2000
+        method = 'gaussian'
+        # apply SLIC and extract (approximately) the supplied number of segments
+        segments = slic(image_uint8_by_function, n_segments=numSegments, sigma=sigma_slic, \
+                multichannel=False, compactness=compactness, start_label=1)
+        self.axes.clear()
+        self.axes.imshow(mark_boundaries(image_uint8_by_function, segments))
+        self.view.draw()
     def on_change(self):
         global fileName_global
         print('ON CHANGE ----')
@@ -230,33 +287,17 @@ class ImageViewer(QMainWindow):
         
         self.color_action = QAction(self)
         self.color_action.triggered.connect(self.on_color_clicked)
-        self.bar.addAction(self.color_action)
+        #self.bar.addAction(self.color_action)
         self.set_color(Qt.black)
-        # self.imageLabel = QLabel() 
-        self.imageLabel = Canvas(fileName_global)
-        self.imageL2 = Canvas('./tempHC.png')
-        self.imageLabel.installEventFilter(self)
-        # self.imageLabel.setAlignment(QtCore.Qt.AlignVCenter)
+
         self.plotwidget = PlotWidget(fileName_global)
         self.plotwidget_original =PlotWidgetOriginal(fileName_global)
-        cursor = Qt.CrossCursor
-        self.imageLabel.setCursor(cursor)
-        self.scrollArea = MyScrollArea(self.imageLabel)
 
-       
-        # buttonSP = QPushButton("Press Me!")
-        # buttonSP.setCheckable(True)
-        # buttonSP.clicked.connect(self.the_button_was_clicked)
-        # 
-        self.setCentralWidget(self.scrollArea)
-
-
-        ################################
         self.layout = QHBoxLayout()
         layout2 = QVBoxLayout()
         layout3 = QVBoxLayout()
         self.layout.setContentsMargins(0,0,0,0)
-        self.layout.setSpacing(20)
+        self.layout.setSpacing(10)
 
         layout2.addWidget(self.plotwidget_original)
 
@@ -270,9 +311,9 @@ class ImageViewer(QMainWindow):
         self.add_palette_buttons(palette)
    
 
-        w = QWidget()
-        w.setLayout(self.layout)
-        self.setCentralWidget(w)
+        main_widget = QWidget()
+        main_widget.setLayout(self.layout)
+        self.setCentralWidget(main_widget)
 
 
         ###################################
@@ -307,13 +348,9 @@ class ImageViewer(QMainWindow):
     def open(self):
         global fileName_global 
         fileName_global = self.pathFile()
-        dicom_image = dicom2array(pydicom.dcmread(fileName_global , force = True))
-        imsave('./temp1.png', dicom_image)
-        fileName="./temp1.png"
+        #dicom_image = dicom2array(pydicom.dcmread(fileName_global , force = True))
         self.plotwidget_original.on_change()
         self.plotwidget.on_change()
-        if fileName:
-           self.view(fileName)
 
     def pathFile(self):
         fileName_global,_ = QFileDialog.getOpenFileName(self, "Open File",
@@ -360,45 +397,9 @@ class ImageViewer(QMainWindow):
         fileName="./tempH.png"
         self.view(fileName)
     def HistMethodCLAHE(self):
-        image = pydicom.dcmread(fileName_global , force = True)
-        image = image.pixel_array
-
-        image = image / image.max() #normalizes image in range 0 - 255
-        image = 255 * image
-        image = image.astype(np.uint8)
-
-        #image = imread(fileName_global)
-        clahe= cv.createCLAHE(clipLimit=0.3,tileGridSize=(8,8))
-        clahe= cv.createCLAHE(clipLimit=2.0,tileGridSize=(8,8))
-        img_clahe = clahe.apply(image)
-        imsave('./tempHC.png',img_clahe)
-        fileName="./tempHC.png"
-        self.view(fileName)
-        
+        self.plotwidget_original.HistMethodClahe()
     def SuperPixel(self):
-        image = pydicom.dcmread(fileName_global , force = True)
-        image = image.pixel_array
-
-        image = image / image.max() #normalizes image in range 0 - 255
-        image = 255 * image
-        image = image.astype(np.uint8)
-        numSegments = 2000
-        sigma_slic = 1
-        compactness = 0.05
-        method = 'gaussian'
-        # apply SLIC and extract (approximately) the supplied number of segments
-        segments = slic(image, n_segments=numSegments, sigma=sigma_slic, \
-                multichannel=False, compactness=compactness, start_label=1)
-        imsave('./superpixel.png',segments)
-        fileName="./superpixel.png"
-        self.view(fileName)
-        # show the output of SLIC
-        fig = plt.figure("Superpixels -- %d segments" % (numSegments))
-        ax = fig.add_subplot(1, 1, 1)
-        ax.imshow(mark_boundaries(image, segments))
-        plt.axis("off")
-        # show the plots
-        plt.show()
+        self.plotwidget_original.SuperPixel()
 
     def about(self):
         QMessageBox.about(self, "LAMAC",
@@ -413,10 +414,6 @@ class ImageViewer(QMainWindow):
         self.exitAct = QtGui.QAction("E&xit", self, shortcut="Ctrl+Q",
                 triggered=self.close)
 
-        #self.zoomInAct = QtGui.QAction("Zoom &In (25%)", self,shortcut="Ctrl++", enabled=False, triggered=self.zoomIn)
-
-        #self.zoomOutAct = QtGui.QAction("Zoom &Out (25%)", self, shortcut="Ctrl+-", enabled=False, triggered=self.zoomOut)
-
         self.normalSizeAct = QtGui.QAction("&Normal Size", self,
                 shortcut="Ctrl+S", enabled=False, triggered=self.normalSize)
 
@@ -428,8 +425,9 @@ class ImageViewer(QMainWindow):
                 enabled=False, checkable=False,
                 triggered=self.HistMethod)
         self.HistMethodCLAHEAct = QtGui.QAction("&Hist CLAHE", self,
-                enabled=False, checkable=False,
                 triggered=self.HistMethodCLAHE)
+        self.SuperPixelAct = QtGui.QAction("&SuperPixel", self,
+                triggered=self.SuperPixel)
         self.aboutAct = QtGui.QAction("&About", self, triggered=self.about)
 
         self.aboutQtAct = QtGui.QAction("About &Qt", self,
@@ -447,6 +445,7 @@ class ImageViewer(QMainWindow):
         self.viewMenu.addAction(self.normalSizeAct)
         self.viewMenu.addAction(self.HistMethodAct)
         self.viewMenu.addAction(self.HistMethodCLAHEAct)
+        self.viewMenu.addAction(self.SuperPixelAct)
         self.viewMenu.addSeparator()
         self.viewMenu.addAction(self.fitToWindowAct)
 
@@ -487,6 +486,4 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     imageViewer = ImageViewer()
     imageViewer.show()
- 
-
-    sys.exit(app.exec_())#!/usr/bin/env python
+    sys.exit(app.exec())
