@@ -13,6 +13,8 @@ from PIL import ImageFile
 from skimage.segmentation import slic
 from skimage.segmentation import mark_boundaries
 from skimage.measure import label, perimeter, regionprops
+
+
 def tissue_segmentation(hu_img, tissue):
     """Tissue segmentation
 
@@ -66,3 +68,19 @@ materials = {
     'air':          [(-10000,  -300), 'black' ]
 
 }
+def dicom2array(dcm):
+    img_raw = np.float64(dcm.pixel_array)
+    output = np.array( dcm.RescaleSlope * img_raw + dcm.RescaleIntercept, dtype=int )
+    print(output)
+    return output
+def ConvertToUint8(dicom_image_array):
+    orig_min = dicom_image_array.min()
+    orig_max = dicom_image_array.max()
+    target_min = 0.0
+    target_max = 255.0
+    dicom_image_array = (dicom_image_array-orig_min)*((target_max- 
+    target_min)/(orig_max-orig_min))+target_min
+    dicom_image_array = dicom_image_array.astype(np.uint8)
+    return dicom_image_array
+def mouse_event(event):
+    print('x: {} and y: {}'.format(event.xdata, event.ydata))
