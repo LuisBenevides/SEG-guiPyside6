@@ -13,6 +13,7 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 from functions import *
 import matplotlib.backends.backend_qt5 as backend
 
+segments_global =[]
 
 class MplToolbar(NavigationToolbar2QT):
     def __init__(self, canvas_, parent_):
@@ -29,9 +30,9 @@ class MplToolbar(NavigationToolbar2QT):
             )
         NavigationToolbar2QT.__init__(self, canvas_, parent_)
 
-fileName_global = "../tomografias/000100.dcm"
+fileName_global = "../../tomografias/000100.dcm"
 dicom_image_array = dicom2array(pydicom.dcmread(fileName_global, force=True))
-
+masks =[]
 # fileName_global = ""
 varpos = 1.0
 
@@ -90,11 +91,32 @@ class PlotWidget(QWidget):
             self.axes.imshow(self.dicom_image, cmap='gray')
             self.view.draw()
 
+def mouse_event(event):
+    global segments_global
+    print('x: {} and y: {}'.format(event.xdata, event.ydata))
+    if segments_global != [] and event.xdata != None or event.ydata != None :
+        paintSuperPixel(event.xdata,event.ydata,segments_global)
+def Union(lst1, lst2):
+    final_list = list(set(lst1) | set(lst2))
+    return final_list
+
+def paintSuperPixel(x,y,segments):
+    global masks
+    if(masks == []):
+        #masks = np.zeros(dicom_image_array.shape[:2], dtype="uint8")
+        masks = np.array(dicom_image_array, dtype="uint8")
+    # x and y inverted because in matplotlib y is row number 
+    masks[segments == segments[int(y)][int(x)]] = 255
+    # show the masked region
+    cv2.imshow("Mask", masks)
+    cv2.imshow("Mask GLOBAL", masks)
+    cv2.imshow("Applied", cv2.bitwise_and(dicom_image_array, dicom_image_array, mask=masks))
+
 
 class PlotWidgetOriginal(QWidget):
     def __init__(self):
         super().__init__()
-
+        self.segments =[]
         self.view = FigureCanvas(Figure(figsize=(5, 3)))
         self.axes = self.view.figure.subplots()
         self.toolbar = MplToolbar(self.view, self)
@@ -123,25 +145,19 @@ class PlotWidgetOriginal(QWidget):
     def SuperPixel(self):
         global dicom_image_array
         global fileName_global
+        global segments_global
         sigma_slic = 1
         compactness = 0.05
         numSegments = 2000
         method = 'gaussian'
         # apply SLIC and extract (approximately) the supplied number of segments
-        segments = slic(dicom_image_array, n_segments=numSegments, sigma=sigma_slic, \
+        segments_global = slic(dicom_image_array, n_segments=numSegments, sigma=sigma_slic, \
                         multichannel=False, compactness=compactness, start_label=1)
         self.axes.clear()
-        self.axes.imshow(mark_boundaries(dicom_image_array, segments))
+        self.axes.imshow(mark_boundaries(dicom_image_array, segments_global))
         self.view.draw()
 
-        for (i, segVal) in enumerate(np.unique(segments)):
-            # construct a mask for the segment
-            mask = np.zeros(dicom_image_array.shape[:2], dtype="uint8")
-            mask[segments == segments[300][200]] = 255
-            # show the masked region
-            cv2.imshow("Mask", mask)
-            cv2.imshow("Applied", cv2.bitwise_and(dicom_image_array, dicom_image_array, mask=mask))
-            cv2.waitKey(0)
+
 
     def on_change(self):
         global dicom_image_array
@@ -167,47 +183,6 @@ class PlotWidgetOriginal(QWidget):
         self.view.draw()
 
 
-class Canvas(QLabel):
-
-    def __init__(self, image_dir):
-        super().__init__()
-        image = QImage(image_dir)
-        pixmap = QPixmap(QPixmap.fromImage(image))
-        self.setPixmap(pixmap)
-
-        self.last_x, self.last_y = None, None
-        self.pen_color = QColor('#000000')
-
-    def set_pen_color(self, c):
-        self.pen_color = QColor(c)
-
-    def mouseMoveEvent(self, e):
-        if self.last_x is None:  # First event.
-            self.last_x = e.x()
-            self.last_y = e.y()
-            return  # Ignore the first time.
-
-        canvas = self.pixmap()
-        painter = QPainter(canvas)
-        p = painter.pen()
-        p.setWidth(3)
-        p.setColor(self.pen_color)
-        painter.setPen(p)
-        if e.x() > 0 and e.y() > 0:
-            painter.drawPoint(e.x() / varpos, e.y() / varpos)
-            print(e.x() / varpos)
-            print(e.y() / varpos)
-        painter.end()
-        self.setPixmap(canvas)
-
-        # Update the origin for next time.
-        self.last_x = e.x()
-        self.last_y = e.y()
-
-    def mouseReleaseEvent(self, e):
-        self.last_x = None
-        self.last_y = None
-
 
 class ImageViewer(QMainWindow):
     def __init__(self):
@@ -223,7 +198,7 @@ class ImageViewer(QMainWindow):
 
         self.plotwidget = PlotWidget()
         self.plotwidget_original = PlotWidgetOriginal()
-
+        
         self.layout = QHBoxLayout()
         layout2 = QVBoxLayout()
         layout3 = QVBoxLayout()

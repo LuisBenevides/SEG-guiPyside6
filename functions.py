@@ -82,5 +82,5 @@ def ConvertToUint8(dicom_image_array):
     target_min)/(orig_max-orig_min))+target_min
     dicom_image_array = dicom_image_array.astype(np.uint8)
     return dicom_image_array
-def mouse_event(event):
-    print('x: {} and y: {}'.format(event.xdata, event.ydata))
+# def mouse_event(event):
+#     print('x: {} and y: {}'.format(event.xdata, event.ydata))
