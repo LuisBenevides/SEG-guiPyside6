@@ -53,65 +53,14 @@ COLORS = [
 ]
 
 
+
 class QPaletteButton(QPushButton):
 
     def __init__(self, color):
         super().__init__()
-        self.setFixedSize(QtCore.QSize(50, 50))
+        self.setFixedSize(QtCore.QSize(24,24))
         self.color = color
         self.setStyleSheet("background-color: %s;" % color)
-
-
-class PlotWidget(QWidget):
-    def __init__(self):
-        super().__init__()
-        #  create widgets
-        self.view = FigureCanvas(Figure(figsize=(5, 3)))
-        self.axes = self.view.figure.subplots()
-        self.toolbar = MplToolbar(self.view, self)
-        #  Create layout
-        vlayout = QVBoxLayout()
-        vlayout.addWidget(self.toolbar)
-        vlayout.addWidget(self.view)
-        self.setLayout(vlayout)
-
-        self.on_change()
-
-    def on_change(self):
-        global fileName_global
-        fileName_global
-
-        """ Update the plot with the current input values """
-        if fileName_global != '':
-            self.dicom_image = dicom2array(pydicom.dcmread(fileName_global, force=True))
-
-        self.axes.clear()
-
-        if fileName_global != '':
-            self.axes.imshow(self.dicom_image, cmap='gray')
-            self.view.draw()
-
-def mouse_event(event):
-    global segments_global
-    print('x: {} and y: {}'.format(event.xdata, event.ydata))
-    if segments_global != [] and event.xdata != None or event.ydata != None :
-        paintSuperPixel(event.xdata,event.ydata,segments_global)
-def Union(lst1, lst2):
-    final_list = list(set(lst1) | set(lst2))
-    return final_list
-
-def paintSuperPixel(x,y,segments):
-    global masks
-    if(masks == []):
-        #masks = np.zeros(dicom_image_array.shape[:2], dtype="uint8")
-        masks = np.array(dicom_image_array, dtype="uint8")
-    # x and y inverted because in matplotlib y is row number 
-    masks[segments == segments[int(y)][int(x)]] = 255
-    # show the masked region
-    cv2.imshow("Mask", masks)
-    cv2.imshow("Mask GLOBAL", masks)
-    cv2.imshow("Applied", cv2.bitwise_and(dicom_image_array, dicom_image_array, mask=masks))
-
 
 class PlotWidgetOriginal(QWidget):
     def __init__(self):
@@ -120,14 +69,13 @@ class PlotWidgetOriginal(QWidget):
         self.view = FigureCanvas(Figure(figsize=(5, 3)))
         self.axes = self.view.figure.subplots()
         self.toolbar = MplToolbar(self.view, self)
-        self.view.mpl_connect('button_press_event', mouse_event)
         vlayout = QVBoxLayout()
         vlayout.addWidget(self.toolbar)
         vlayout.addWidget(self.view)
         self.setLayout(vlayout)
 
         self.on_change()
-
+        
     def HistMethodClahe(self):
         global dicom_image_array
         global fileName_global
@@ -136,8 +84,8 @@ class PlotWidgetOriginal(QWidget):
             dicom_image_array = select_RoI(dicom_image_array)
             dicom_image_array = ConvertToUint8(dicom_image_array)
 
-        dicom_image_array = exposure.equalize_adapthist(dicom_image_array, clip_limit=0.03)
-
+        dicom_image_array = exposure.equalize_adapthist(dicom_image_array, clip_limit=0.03) 
+    
         self.axes.clear()
         self.axes.imshow(dicom_image_array, cmap='gray')
         self.view.draw()
@@ -177,11 +125,106 @@ class PlotWidgetOriginal(QWidget):
         global fileName_global
         if fileName_global != '':
             dicom_image_array = dicom2array(pydicom.dcmread(fileName_global, force=True))
-            dicom_image_array = select_RoI(dicom_image_array)
             dicom_image_array = ConvertToUint8(dicom_image_array)
         self.axes.imshow(dicom_image_array, cmap='gray')
         self.view.draw()
+    def DeleteObjects(self):
+        global dicom_image_array
+        global fileName_global
+        if fileName_global != '':
+            dicom_image_array = select_RoI(dicom_image_array)
+        self.axes.imshow(dicom_image_array, cmap='gray')
+        self.view.draw()
 
+
+
+def mouse_event(event):
+    global segments_global
+    print('x: {} and y: {}'.format(event.xdata, event.ydata))
+    if segments_global != [] and event.xdata != None or event.ydata != None :
+        paintSuperPixel(event.xdata,event.ydata,segments_global)
+def Union(lst1, lst2):
+    final_list = list(set(lst1) | set(lst2))
+    return final_list
+
+def paintSuperPixel(x,y,segments):
+    global masks
+    if(masks == []):
+        #masks = np.zeros(dicom_image_array.shape[:2], dtype="uint8")
+        masks = np.array(dicom_image_array, dtype="uint8")
+    # x and y inverted because in matplotlib y is row number 
+    masks[segments == segments[int(y)][int(x)]] = 255
+    # show the masked region
+    cv2.imshow("Mask", masks)
+    cv2.imshow("Mask GLOBAL", masks)
+    cv2.imshow("Applied", cv2.bitwise_and(dicom_image_array, dicom_image_array, mask=masks))
+
+
+class PlotWidgetModify(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.segments =[]
+        self.view = FigureCanvas(Figure(figsize=(5, 3)))
+        self.axes = self.view.figure.subplots()
+        self.toolbar = MplToolbar(self.view, self)
+        self.view.mpl_connect('button_press_event', mouse_event)
+        vlayout = QVBoxLayout()
+        vlayout.addWidget(self.toolbar)
+        vlayout.addWidget(self.view)
+        self.setLayout(vlayout)
+
+        self.on_change()
+
+    def HistMethodClahe(self):
+        self.axes.clear()
+        self.axes.imshow(dicom_image_array, cmap='gray')
+        self.view.draw()
+
+    def SuperPixel(self):
+        global dicom_image_array
+        global fileName_global
+        global segments_global
+        sigma_slic = 1
+        compactness = 0.05
+        numSegments = 2000
+        method = 'gaussian'
+        # apply SLIC and extract (approximately) the supplied number of segments
+        segments_global = slic(dicom_image_array, n_segments=numSegments, sigma=sigma_slic, \
+                        multichannel=False, compactness=compactness, start_label=1)
+        self.axes.clear()
+        self.axes.imshow(mark_boundaries(dicom_image_array, segments_global))
+        self.view.draw()
+
+
+
+    def on_change(self):
+        global dicom_image_array
+        global fileName_global
+        dicom_image_array = ConvertToUint8(dicom_image_array)
+        """ Update the plot with the current input values """
+        # if fileName_global != '': 
+        #     self.dicom_image = dicom2array(pydicom.dcmread(fileName_global , force = True))
+        self.axes.clear()
+
+        if fileName_global != '':
+            self.axes.imshow(dicom_image_array, cmap='gray')
+            self.view.draw()
+
+    def ResetDicom(self):
+        global dicom_image_array
+        global fileName_global
+        if fileName_global != '':
+            dicom_image_array = dicom2array(pydicom.dcmread(fileName_global, force=True))
+            dicom_image_array = ConvertToUint8(dicom_image_array)
+        self.axes.imshow(dicom_image_array, cmap='gray')
+        self.view.draw()
+    def DeleteObjects(self):
+        global dicom_image_array
+        global fileName_global
+        if fileName_global != '':
+            dicom_image_array = select_RoI(dicom_image_array)
+        self.axes.imshow(dicom_image_array, cmap='gray')
+        self.view.draw()
 
 
 class ImageViewer(QMainWindow):
@@ -196,8 +239,8 @@ class ImageViewer(QMainWindow):
         # self.bar.addAction(self.color_action)
         self.set_color(Qt.black)
 
-        self.plotwidget = PlotWidget()
         self.plotwidget_original = PlotWidgetOriginal()
+        self.plotwidget_modify = PlotWidgetModify()
         
         self.layout = QHBoxLayout()
         layout2 = QVBoxLayout()
@@ -208,7 +251,7 @@ class ImageViewer(QMainWindow):
         layout2.addWidget(self.plotwidget_original)
 
         self.layout.addLayout(layout2)
-        layout3.addWidget(self.plotwidget)
+        layout3.addWidget(self.plotwidget_modify)
 
         self.layout.addLayout(layout3)
         # self.layout.addWidget(self.imageLabel)
@@ -221,7 +264,10 @@ class ImageViewer(QMainWindow):
         self.setCentralWidget(main_widget)
 
         ###################################
-
+        # palette = main_widget.QHBoxLayout()
+        # self.add_palette_buttons(palette)
+        # self.layout.addLayout(palette)
+        
         self.createActions()
         self.createMenus()
         self.setGeometry(600, 600, 600, 600)
@@ -246,17 +292,16 @@ class ImageViewer(QMainWindow):
     def add_palette_buttons(self, layout):
         for c in COLORS:
             b = QPaletteButton(c)
-            b.pressed.connect(lambda c=c: self.imageLabel.set_pen_color(c))
+            b.pressed.connect(lambda c=c: self.canvas.set_pen_color(c))
             layout.addWidget(b)
-
     def open(self):
         global fileName_global
         global dicom_image_array
         fileName_global = self.pathFile()
         dicom_image_array = dicom2array(pydicom.dcmread(fileName_global, force=True))
-        dicom_image_array = select_RoI(dicom_image_array)
+        dicom_image_array =  ConvertToUint8(dicom_image_array)
         self.plotwidget_original.on_change()
-        self.plotwidget.on_change()
+        self.plotwidget_modify.on_change()
 
     def pathFile(self):
         fileName_global, _ = QFileDialog.getOpenFileName(self, "Open File",
@@ -304,12 +349,15 @@ class ImageViewer(QMainWindow):
 
     def HistMethodCLAHE(self):
         self.plotwidget_original.HistMethodClahe()
+        self.plotwidget_modify.HistMethodClahe()
 
     def SuperPixel(self):
         self.plotwidget_original.SuperPixel()
+        self.plotwidget_modify.SuperPixel()
 
     def OriginalImage(self):
         self.plotwidget_original.ResetDicom()
+        self.plotwidget_modify.ResetDicom()
 
     def about(self):
         QMessageBox.about(self, "LAMAC",
