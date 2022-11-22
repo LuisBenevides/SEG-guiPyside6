@@ -14,7 +14,7 @@ from functions import *
 import matplotlib.backends.backend_qt5 as backend
 
 segments_global =[]
-
+mask3d  =[]
 class MplToolbar(NavigationToolbar2QT):
     def __init__(self, canvas_, parent_):
         backend.figureoptions = None
@@ -30,8 +30,9 @@ class MplToolbar(NavigationToolbar2QT):
             )
         NavigationToolbar2QT.__init__(self, canvas_, parent_)
 
-fileName_global = "../../tomografias/000100.dcm"
+fileName_global = "/home/thelmo/workspace/tomografias/000100.dcm"
 dicom_image_array = dicom2array(pydicom.dcmread(fileName_global, force=True))
+dicom_image_array =  ConvertToUint8(dicom_image_array)
 masks =[]
 # fileName_global = ""
 varpos = 1.0
@@ -149,15 +150,34 @@ def Union(lst1, lst2):
 
 def paintSuperPixel(x,y,segments):
     global masks
+    fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(6, 6))
+    global mask3d 
     if(masks == []):
         #masks = np.zeros(dicom_image_array.shape[:2], dtype="uint8")
         masks = np.array(dicom_image_array, dtype="uint8")
+        print(dicom_image_array.shape)
+        mask3d = np.zeros((dicom_image_array.shape[0],dicom_image_array.shape[1],3), dtype = "uint8")
+        # print(mask3d.shape)
+        # print(mask3d)
     # x and y inverted because in matplotlib y is row number 
-    masks[segments == segments[int(y)][int(x)]] = 255
+    print(mask3d)
+    masks[segments == segments[int(y)][int(x)]] = 1
     # show the masked region
-    cv2.imshow("Mask", masks)
-    cv2.imshow("Mask GLOBAL", masks)
-    cv2.imshow("Applied", cv2.bitwise_and(dicom_image_array, dicom_image_array, mask=masks))
+
+    colorvec = np.array([255, 204, 71])
+
+    print(dicom_image_array)
+    mask3d[:,:,0] = colorvec[0] * masks * dicom_image_array
+    mask3d[:,:,1] = colorvec[1] * masks * dicom_image_array
+    mask3d[:,:,2] = colorvec[2] * masks * dicom_image_array
+
+    # ax.imshow(dicom_image_array,alpha=0.5)
+    ax.imshow(mask3d)
+    plt.show()
+    
+    # cv2.imshow("Mask", masks)
+    # cv2.imshow("Mask GLOBAL", masks)
+    # cv2.imshow("Applied", cv2.bitwise_and(dicom_image_array, dicom_image_array, mask=masks))
 
 
 class PlotWidgetModify(QWidget):
