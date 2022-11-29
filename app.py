@@ -155,34 +155,21 @@ def paintSuperPixel(x,y,segments):
     fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(6, 6))
     global mask3d 
     if(masks == []):
-        #masks = np.zeros(dicom_image_array.shape[:2], dtype="uint8")
-        masks = np.array(dicom_image_array, dtype="uint8")
-        print(dicom_image_array.shape)
+        masks = np.zeros_like(dicom_image_array, dtype="bool")
+        print(dicom_image_array.max(),dicom_image_array.min())
         mask3d = np.zeros((dicom_image_array.shape[0],dicom_image_array.shape[1],3), dtype = "uint8")
-        # print(mask3d.shape)
-        # print(mask3d)
-    # x and y inverted because in matplotlib y is row number 
-    print(mask3d)
+
     masks[segments == segments[int(y)][int(x)]] = 1
     # show the masked region
 
-    colorvec = np.array([255, 255, 255])
+    colorvec = np.array([255, 255, 0])
+    DIA = ((255 * dicom_image_array) * (1-masks)).astype('uint8') 
+    mask3d[:,:,0] = colorvec[0] * masks + DIA 
+    mask3d[:,:,1] = colorvec[1] * masks + DIA 
+    mask3d[:,:,2] = colorvec[2] * masks + DIA
 
-    print(dicom_image_array)
-    mask3d[:,:,0] = colorvec[0] * masks * dicom_image_array
-    mask3d[:,:,1] = colorvec[1] * masks * dicom_image_array
-    mask3d[:,:,2] = colorvec[2] * masks * dicom_image_array
-    ax.imshow(dicom_image_array)
-    ax.imshow(mask3d,alpha=0.9 )
-
-    
-    #ax.imshow(mark_boundaries(dicom_image_array, mask3d))
-    # ax.contour(masks, colors='red', linewidths=1)
+    ax.imshow(mask3d )
     plt.show()
-    
-    # cv2.imshow("Mask", masks)
-    # cv2.imshow("Mask GLOBAL", masks)
-    # cv2.imshow("Applied", cv2.bitwise_and(dicom_image_array, dicom_image_array, mask=masks))
 
 
 class PlotWidgetModify(QWidget):
