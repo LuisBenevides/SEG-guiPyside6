@@ -6,7 +6,7 @@ from PySide6.QtGui import *
 from PySide6.QtCore import *
 import cv2 as cv2
 from matplotlib import pyplot as plt
-
+from skimage.segmentation import mark_boundaries
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
@@ -15,6 +15,7 @@ import matplotlib.backends.backend_qt5 as backend
 
 segments_global =[]
 mask3d  =[]
+superpixel_auth = False
 class MplToolbar(NavigationToolbar2QT):
     def __init__(self, canvas_, parent_):
         backend.figureoptions = None
@@ -69,6 +70,7 @@ class PlotWidgetOriginal(QWidget):
         self.segments =[]
         self.view = FigureCanvas(Figure(figsize=(5, 3)))
         self.axes = self.view.figure.subplots()
+        
         self.toolbar = MplToolbar(self.view, self)
         vlayout = QVBoxLayout()
         vlayout.addWidget(self.toolbar)
@@ -76,7 +78,7 @@ class PlotWidgetOriginal(QWidget):
         self.setLayout(vlayout)
 
         self.on_change()
-        
+
     def HistMethodClahe(self):
         global dicom_image_array
         global fileName_global
@@ -133,7 +135,9 @@ class PlotWidgetOriginal(QWidget):
         global dicom_image_array
         global fileName_global
         if fileName_global != '':
-            dicom_image_array = select_RoI(dicom_image_array)
+            dicom_image_array = dicom2array(pydicom.dcmread(fileName_global, force=True))
+            dicom_image_array = select_RoI(dicom_image_array)            
+            dicom_image_array = ConvertToUint8(dicom_image_array)
         self.axes.imshow(dicom_image_array, cmap='gray')
         self.view.draw()
 
@@ -141,12 +145,10 @@ class PlotWidgetOriginal(QWidget):
 
 def mouse_event(event):
     global segments_global
+    global superpixel_auth
     print('x: {} and y: {}'.format(event.xdata, event.ydata))
-    if segments_global != [] and event.xdata != None or event.ydata != None :
+    if (segments_global != [] and event.xdata != None or event.ydata != None ) and (superpixel_auth == True):
         paintSuperPixel(event.xdata,event.ydata,segments_global)
-def Union(lst1, lst2):
-    final_list = list(set(lst1) | set(lst2))
-    return final_list
 
 def paintSuperPixel(x,y,segments):
     global masks
@@ -164,15 +166,18 @@ def paintSuperPixel(x,y,segments):
     masks[segments == segments[int(y)][int(x)]] = 1
     # show the masked region
 
-    colorvec = np.array([255, 204, 71])
+    colorvec = np.array([255, 255, 255])
 
     print(dicom_image_array)
     mask3d[:,:,0] = colorvec[0] * masks * dicom_image_array
     mask3d[:,:,1] = colorvec[1] * masks * dicom_image_array
     mask3d[:,:,2] = colorvec[2] * masks * dicom_image_array
+    ax.imshow(dicom_image_array)
+    ax.imshow(mask3d,alpha=0.9 )
 
-    # ax.imshow(dicom_image_array,alpha=0.5)
-    ax.imshow(mask3d)
+    
+    #ax.imshow(mark_boundaries(dicom_image_array, mask3d))
+    # ax.contour(masks, colors='red', linewidths=1)
     plt.show()
     
     # cv2.imshow("Mask", masks)
@@ -204,6 +209,7 @@ class PlotWidgetModify(QWidget):
         global dicom_image_array
         global fileName_global
         global segments_global
+        global superpixel_auth
         sigma_slic = 1
         compactness = 0.05
         numSegments = 2000
@@ -214,6 +220,7 @@ class PlotWidgetModify(QWidget):
         self.axes.clear()
         self.axes.imshow(mark_boundaries(dicom_image_array, segments_global))
         self.view.draw()
+        superpixel_auth = True
 
 
 
@@ -238,14 +245,18 @@ class PlotWidgetModify(QWidget):
             dicom_image_array = ConvertToUint8(dicom_image_array)
         self.axes.imshow(dicom_image_array, cmap='gray')
         self.view.draw()
+        superpixel_auth = False
     def DeleteObjects(self):
         global dicom_image_array
         global fileName_global
         if fileName_global != '':
-            dicom_image_array = select_RoI(dicom_image_array)
+            dicom_image_array = dicom2array(pydicom.dcmread(fileName_global, force=True))
+            dicom_image_array = select_RoI(dicom_image_array)            
+            dicom_image_array = ConvertToUint8(dicom_image_array)
+
         self.axes.imshow(dicom_image_array, cmap='gray')
         self.view.draw()
-
+        superpixel_auth = False
 
 class ImageViewer(QMainWindow):
     def __init__(self):
@@ -359,14 +370,6 @@ class ImageViewer(QMainWindow):
 
         self.updateActions()
 
-    def HistMethod(self):
-        # Equalization
-        image = dicom2array(pydicom.dcmread(fileName_global, force=True))
-        img_eq = exposure.equalize_hist(image)
-        imsave('./tempH.png', (img_eq * 255).astype(np.uint8))
-        fileName = "./tempH.png"
-        self.view(fileName)
-
     def HistMethodCLAHE(self):
         self.plotwidget_original.HistMethodClahe()
         self.plotwidget_modify.HistMethodClahe()
@@ -378,7 +381,9 @@ class ImageViewer(QMainWindow):
     def OriginalImage(self):
         self.plotwidget_original.ResetDicom()
         self.plotwidget_modify.ResetDicom()
-
+    def RemoveObjects(self):
+        self.plotwidget_original.DeleteObjects()
+        self.plotwidget_modify.DeleteObjects()     
     def about(self):
         QMessageBox.about(self, "LAMAC",
                           "<p>Segmentador Manual !!! </p>")
@@ -399,15 +404,18 @@ class ImageViewer(QMainWindow):
                                             enabled=False, checkable=True, shortcut="Ctrl+F",
                                             triggered=self.fitToWindow)
 
-        self.HistMethodAct = QtGui.QAction("&HistMethod", self,
-                                           enabled=False, checkable=False,
-                                           triggered=self.HistMethod)
+        # self.HistMethodAct = QtGui.QAction("&HistMethod", self,
+        #                                    enabled=False, checkable=False,
+        #                                    triggered=self.HistMethod)
         self.HistMethodCLAHEAct = QtGui.QAction("&Hist CLAHE", self,
                                                 triggered=self.HistMethodCLAHE)
         self.SuperPixelAct = QtGui.QAction("&SuperPixel", self,
                                            triggered=self.SuperPixel)
         self.OriginalImageAct = QtGui.QAction("&Original Image", self,
                                               triggered=self.OriginalImage)
+        self.RemoveObjectsAct = QtGui.QAction("&Remove Objects", self,
+                                              triggered=self.RemoveObjects)
+        
         self.aboutAct = QtGui.QAction("&About", self, triggered=self.about)
 
         self.aboutQtAct = QtGui.QAction("About &Qt", self,
@@ -423,10 +431,11 @@ class ImageViewer(QMainWindow):
         # self.viewMenu.addAction(self.zoomInAct)
         # self.viewMenu.addAction(self.zoomOutAct)
         self.viewMenu.addAction(self.normalSizeAct)
-        self.viewMenu.addAction(self.HistMethodAct)
+        # self.viewMenu.addAction(self.HistMethodAct)
         self.viewMenu.addAction(self.HistMethodCLAHEAct)
         self.viewMenu.addAction(self.SuperPixelAct)
         self.viewMenu.addAction(self.OriginalImageAct)
+        self.viewMenu.addAction(self.RemoveObjectsAct)
         self.viewMenu.addSeparator()
         self.viewMenu.addAction(self.fitToWindowAct)
 
