@@ -13,7 +13,8 @@ from PIL import ImageFile
 from skimage.segmentation import slic
 from skimage.segmentation import mark_boundaries
 from skimage.measure import label, perimeter, regionprops
-
+from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
+import matplotlib.backends.backend_qt5 as backend
 
 def tissue_segmentation(hu_img, tissue):
     """Tissue segmentation
@@ -82,5 +83,17 @@ def ConvertToUint8(dicom_image_array):
     target_min)/(orig_max-orig_min))+target_min
     dicom_image_array = dicom_image_array.astype(np.uint8)
     return dicom_image_array
-# def mouse_event(event):
-#     print('x: {} and y: {}'.format(event.xdata, event.ydata))
+class MplToolbar(NavigationToolbar2QT):
+    def __init__(self, canvas_, parent_):
+        backend.figureoptions = None
+        self.toolitems = (
+            ('Home', 'Reset original view', 'home', 'home'),
+            ('Back', 'Back to previous view', 'back', 'back'),
+            ('Forward', 'Forward to next view', 'forward', 'forward'),
+            (None, None, None, None),
+            ('Pan', 'Pan axes with left mouse, zoom with right', 'move', 'pan'),
+            ('Zoom', 'Zoom to rectangle', 'zoom_to_rect', 'zoom'),
+            (None, None, None, None),
+            ('Save', 'Save the current image', 'filesave', 'save_figure'),
+            )
+        NavigationToolbar2QT.__init__(self, canvas_, parent_)

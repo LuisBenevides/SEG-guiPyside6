@@ -1,5 +1,3 @@
-
-
 from PySide6 import QtCore, QtGui
 from PySide6.QtWidgets import *
 from PySide6.QtGui import *
@@ -9,37 +7,45 @@ from matplotlib import pyplot as plt
 from skimage.segmentation import mark_boundaries
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvas
-from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 from functions import *
-import matplotlib.backends.backend_qt5 as backend
 
 segments_global =[]
 mask3d  =[]
 superpixel_auth = False
-class MplToolbar(NavigationToolbar2QT):
-    def __init__(self, canvas_, parent_):
-        backend.figureoptions = None
-        self.toolitems = (
-            ('Home', 'Reset original view', 'home', 'home'),
-            ('Back', 'Back to previous view', 'back', 'back'),
-            ('Forward', 'Forward to next view', 'forward', 'forward'),
-            (None, None, None, None),
-            ('Pan', 'Pan axes with left mouse, zoom with right', 'move', 'pan'),
-            ('Zoom', 'Zoom to rectangle', 'zoom_to_rect', 'zoom'),
-            (None, None, None, None),
-            ('Save', 'Save the current image', 'filesave', 'save_figure'),
-            )
-        NavigationToolbar2QT.__init__(self, canvas_, parent_)
+
+
+def mouse_event(event):
+    global segments_global
+    global superpixel_auth
+    print('x: {} and y: {}'.format(event.xdata, event.ydata))
+    if (segments_global != [] and event.xdata != None or event.ydata != None ) and (superpixel_auth == True):
+        paintSuperPixel(event.xdata,event.ydata,segments_global)
+
+def paintSuperPixel(x,y,segments):
+    global masks
+    fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(6, 6))
+    global mask3d 
+    if(masks == []):
+        masks = np.zeros_like(dicom_image_array, dtype="bool")
+        print(dicom_image_array.max(),dicom_image_array.min())
+        mask3d = np.zeros((dicom_image_array.shape[0],dicom_image_array.shape[1],3), dtype = "uint8")
+
+    masks[segments == segments[int(y)][int(x)]] = 1
+    # show the masked region
+
+    colorvec = np.array([255, 255, 0])
+    D_I_A = ((255 * dicom_image_array) * (~masks)).astype('uint8') 
+    mask3d[:,:,0] = colorvec[0] * masks + D_I_A 
+    mask3d[:,:,1] = colorvec[1] * masks + D_I_A 
+    mask3d[:,:,2] = colorvec[2] * masks + D_I_A
+    imageViewer.plotsuperpixelmask.UpdateView()
 
 fileName_global = "/home/thelmo/workspace/tomografias/000100.dcm"
 dicom_image_array = dicom2array(pydicom.dcmread(fileName_global, force=True))
 dicom_image_array =  ConvertToUint8(dicom_image_array)
 masks =[]
-# fileName_global = ""
-varpos = 1.0
 
 COLORS = [
-    # https://lospec.com/palette-list/6-bit-12-colour-challenge
     '#ffeeb9',
     '#bd4b4b',
     '#442242',
@@ -53,6 +59,28 @@ COLORS = [
     '#6b6a7c',
     '#232328'
 ]
+
+
+class PlotSuperPixelMask(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.view = FigureCanvas(Figure(figsize=(5, 3)))
+        self.axes = self.view.figure.subplots()
+        self.toolbar = MplToolbar(self.view, self)
+        self.view.mpl_connect('button_press_event', mouse_event)
+        vlayout = QVBoxLayout()
+        vlayout.addWidget(self.toolbar)
+        vlayout.addWidget(self.view)
+        self.setLayout(vlayout) 
+    def UpdateView(self):
+        global mask3d
+        if mask3d != "": 
+            self.axes.clear()
+            self.axes.imshow(mask3d, cmap='gray')
+            self.view.draw()
+            self.axes.clear()
+    def ClearView(self):
+        self.axes.clear()
 
 
 
@@ -109,7 +137,6 @@ class PlotWidgetOriginal(QWidget):
         self.view.draw()
 
 
-
     def on_change(self):
         global dicom_image_array
         global fileName_global
@@ -143,33 +170,6 @@ class PlotWidgetOriginal(QWidget):
 
 
 
-def mouse_event(event):
-    global segments_global
-    global superpixel_auth
-    print('x: {} and y: {}'.format(event.xdata, event.ydata))
-    if (segments_global != [] and event.xdata != None or event.ydata != None ) and (superpixel_auth == True):
-        paintSuperPixel(event.xdata,event.ydata,segments_global)
-
-def paintSuperPixel(x,y,segments):
-    global masks
-    fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(6, 6))
-    global mask3d 
-    if(masks == []):
-        masks = np.zeros_like(dicom_image_array, dtype="bool")
-        print(dicom_image_array.max(),dicom_image_array.min())
-        mask3d = np.zeros((dicom_image_array.shape[0],dicom_image_array.shape[1],3), dtype = "uint8")
-
-    masks[segments == segments[int(y)][int(x)]] = 1
-    # show the masked region
-
-    colorvec = np.array([255, 255, 0])
-    DIA = ((255 * dicom_image_array) * (1-masks)).astype('uint8') 
-    mask3d[:,:,0] = colorvec[0] * masks + DIA 
-    mask3d[:,:,1] = colorvec[1] * masks + DIA 
-    mask3d[:,:,2] = colorvec[2] * masks + DIA
-
-    ax.imshow(mask3d )
-    plt.show()
 
 
 class PlotWidgetModify(QWidget):
@@ -186,8 +186,11 @@ class PlotWidgetModify(QWidget):
         self.setLayout(vlayout)
 
         self.on_change()
-
+    def ChangeSuperpixelAuth(self):
+        global superpixel_auth
+        superpixel_auth = False
     def HistMethodClahe(self):
+        self.ChangeSuperpixelAuth()
         self.axes.clear()
         self.axes.imshow(dicom_image_array, cmap='gray')
         self.view.draw()
@@ -212,6 +215,7 @@ class PlotWidgetModify(QWidget):
 
 
     def on_change(self):
+        self.ChangeSuperpixelAuth()
         global dicom_image_array
         global fileName_global
         dicom_image_array = ConvertToUint8(dicom_image_array)
@@ -225,6 +229,7 @@ class PlotWidgetModify(QWidget):
             self.view.draw()
 
     def ResetDicom(self):
+        self.ChangeSuperpixelAuth()
         global dicom_image_array
         global fileName_global
         if fileName_global != '':
@@ -234,6 +239,7 @@ class PlotWidgetModify(QWidget):
         self.view.draw()
         superpixel_auth = False
     def DeleteObjects(self):
+        self.ChangeSuperpixelAuth()
         global dicom_image_array
         global fileName_global
         if fileName_global != '':
@@ -260,13 +266,15 @@ class ImageViewer(QMainWindow):
         self.plotwidget_original = PlotWidgetOriginal()
         self.plotwidget_modify = PlotWidgetModify()
         
+        self.plotsuperpixelmask = PlotSuperPixelMask()   
         self.layout = QHBoxLayout()
         layout2 = QVBoxLayout()
         layout3 = QVBoxLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(10)
 
-        layout2.addWidget(self.plotwidget_original)
+        #layout2.addWidget(self.plotwidget_original)
+        layout2.addWidget(self.plotsuperpixelmask)
 
         self.layout.addLayout(layout2)
         layout3.addWidget(self.plotwidget_modify)
@@ -364,7 +372,7 @@ class ImageViewer(QMainWindow):
     def SuperPixel(self):
         self.plotwidget_original.SuperPixel()
         self.plotwidget_modify.SuperPixel()
-
+        self.plotsuperpixelmask.UpdateView()
     def OriginalImage(self):
         self.plotwidget_original.ResetDicom()
         self.plotwidget_modify.ResetDicom()
