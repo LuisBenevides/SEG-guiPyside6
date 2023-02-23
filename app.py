@@ -10,16 +10,22 @@ from matplotlib.backends.backend_qt5agg import FigureCanvas
 from functions import *
 import copy
 from PIL import Image
+from os import path
 segments_global = []
 mask3d  = []
 previous_paints = []
 superpixel_auth = False
 colorvec = np.array([0, 0, 0])
-
+masks_empty = True
 def mouse_event(event):
     global segments_global
     global superpixel_auth
-    if (not np.array_equal(masks, []) and event.xdata != None or event.ydata != None ) and (superpixel_auth == True):
+    if ((event.xdata != None or event.ydata != None) 
+    and ((event.xdata > 1 and event.ydata >1)) 
+    and (superpixel_auth == True) 
+    and (str(imageViewer.plotsuperpixelmask.toolbar._actions["zoom"]).__contains__("checked=false"))
+    and (str(imageViewer.plotwidget_modify.toolbar._actions["zoom"]).__contains__("checked=false"))
+    ):
         paintSuperPixel(event.xdata,event.ydata,segments_global)
 
 def paintSuperPixel(x,y,segments):
@@ -28,11 +34,13 @@ def paintSuperPixel(x,y,segments):
     global mask3d 
     global previous_paints
     global colorvec
-    if(np.array_equal(masks, [])):
+    global masks_empty
+    if(masks_empty):
         mask3d = np.zeros((dicom_image_array.shape[0],dicom_image_array.shape[1],3), dtype = "uint8")
         mask3d[:,:,0] = 255 * dicom_image_array 
         mask3d[:,:,1] = 255 * dicom_image_array 
         mask3d[:,:,2] = 255 * dicom_image_array
+        masks_empty = False
     masks = np.zeros_like(dicom_image_array, dtype="bool")
     previous_paints.append(copy.deepcopy(mask3d))
     masks[segments == segments[int(y)][int(x)]] = 1
@@ -78,8 +86,16 @@ class MplToolbar(NavigationToolbar2QT):
             )
         NavigationToolbar2QT.__init__(self, canvas_, parent_)
     def save_mask(self):
-        img = Image.fromarray(mask3d, 'RGB')
-        img.save('mask.png')
+        if(not np.array_equal(mask3d, [])):
+            file_number = 1
+            img = Image.fromarray(mask3d, 'RGB')
+            
+            if(path.exists("mask.png")):
+                while(path.exists(f'mask{str(file_number)}.png')):
+                    file_number +=1
+
+                img.save(f'mask{str(file_number)}.png')
+            img.save('mask.png')
     def back_paint(self):
         global previous_paints 
         global mask3d
@@ -100,7 +116,7 @@ class PlotSuperPixelMask(QWidget):
         self.setLayout(vlayout) 
     def UpdateView(self):
         global mask3d
-        if not np.array_equal(mask3d, []): 
+        if (not masks_empty):
             self.axes.clear()
             self.axes.imshow(mask3d, cmap='gray')
             self.view.draw()
