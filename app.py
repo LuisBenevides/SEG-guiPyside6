@@ -8,39 +8,42 @@ from skimage.segmentation import mark_boundaries
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvas
 from functions import *
-
-segments_global =[]
-mask3d  =[]
+import copy
+from PIL import Image
+segments_global = []
+mask3d  = []
+previous_paints = []
 superpixel_auth = False
-
+colorvec = np.array([0, 0, 0])
 
 def mouse_event(event):
     global segments_global
     global superpixel_auth
-    print('x: {} and y: {}'.format(event.xdata, event.ydata))
-    if (segments_global != [] and event.xdata != None or event.ydata != None ) and (superpixel_auth == True):
+    if (not np.array_equal(masks, []) and event.xdata != None or event.ydata != None ) and (superpixel_auth == True):
         paintSuperPixel(event.xdata,event.ydata,segments_global)
 
 def paintSuperPixel(x,y,segments):
     global masks
-    fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(6, 6))
+    # fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(6, 6))
     global mask3d 
-    if(masks == []):
-        masks = np.zeros_like(dicom_image_array, dtype="bool")
-        print(dicom_image_array.max(),dicom_image_array.min())
+    global previous_paints
+    global colorvec
+    if(np.array_equal(masks, [])):
         mask3d = np.zeros((dicom_image_array.shape[0],dicom_image_array.shape[1],3), dtype = "uint8")
-
+        mask3d[:,:,0] = 255 * dicom_image_array 
+        mask3d[:,:,1] = 255 * dicom_image_array 
+        mask3d[:,:,2] = 255 * dicom_image_array
+    masks = np.zeros_like(dicom_image_array, dtype="bool")
+    previous_paints.append(copy.deepcopy(mask3d))
     masks[segments == segments[int(y)][int(x)]] = 1
     # show the masked region
-
-    colorvec = np.array([255, 255, 0])
-    D_I_A = ((255 * dicom_image_array) * (~masks)).astype('uint8') 
-    mask3d[:,:,0] = colorvec[0] * masks + D_I_A 
-    mask3d[:,:,1] = colorvec[1] * masks + D_I_A 
-    mask3d[:,:,2] = colorvec[2] * masks + D_I_A
+    # D_I_A = ((255 * dicom_image_array) * (~masks)).astype('uint8') 
+    mask3d[:,:,0] = colorvec[0] * masks + mask3d[:,:,0]*(~masks).astype('uint8')
+    mask3d[:,:,1] = colorvec[1] * masks + mask3d[:,:,1]*(~masks).astype('uint8')
+    mask3d[:,:,2] = colorvec[2] * masks + mask3d[:,:,2]*(~masks).astype('uint8')
     imageViewer.plotsuperpixelmask.UpdateView()
-
-fileName_global = "/home/thelmo/workspace/tomografias/000100.dcm"
+    
+fileName_global = "C:/Users/LUIAN/Desktop/SegPy/SEG-guiPyside6/images/000003.dcm"
 dicom_image_array = dicom2array(pydicom.dcmread(fileName_global, force=True))
 dicom_image_array =  ConvertToUint8(dicom_image_array)
 masks =[]
@@ -60,7 +63,30 @@ COLORS = [
     '#232328'
 ]
 
-
+class MplToolbar(NavigationToolbar2QT):
+    def __init__(self, canvas_, parent_):
+        backend.figureoptions = None
+        self.toolitems = (
+            ('Home', 'Reset original view', 'home', 'home'),
+            ('Back', 'Back to previous view', 'back', 'back'),
+            ('Forward', 'Forward to next view', 'forward', 'forward'),
+            (None, None, None, None),
+            ('Pan', 'Pan axes with left mouse, zoom with right', 'move', 'pan'),
+            ('Zoom', 'Zoom to rectangle', 'zoom_to_rect', 'zoom'),
+            ('Port', 'Back to the previous paint', "back", 'back_paint'),
+            ('Save', 'Save the current image', 'filesave', 'save_mask'),
+            )
+        NavigationToolbar2QT.__init__(self, canvas_, parent_)
+    def save_mask(self):
+        img = Image.fromarray(mask3d, 'RGB')
+        img.save('mask.png')
+    def back_paint(self):
+        global previous_paints 
+        global mask3d
+        if(previous_paints.__len__() >= 1):  
+            mask3d = copy.deepcopy(previous_paints[(previous_paints.__len__()-1)])
+            previous_paints.__delitem__(previous_paints.__len__() -1)
+            imageViewer.plotsuperpixelmask.UpdateView()
 class PlotSuperPixelMask(QWidget):
     def __init__(self):
         super().__init__()
@@ -74,11 +100,10 @@ class PlotSuperPixelMask(QWidget):
         self.setLayout(vlayout) 
     def UpdateView(self):
         global mask3d
-        if mask3d != "": 
+        if not np.array_equal(mask3d, []): 
             self.axes.clear()
             self.axes.imshow(mask3d, cmap='gray')
             self.view.draw()
-            self.axes.clear()
     def ClearView(self):
         self.axes.clear()
 
@@ -232,6 +257,7 @@ class PlotWidgetModify(QWidget):
         self.ChangeSuperpixelAuth()
         global dicom_image_array
         global fileName_global
+        global superpixel_auth
         if fileName_global != '':
             dicom_image_array = dicom2array(pydicom.dcmread(fileName_global, force=True))
             dicom_image_array = ConvertToUint8(dicom_image_array)
@@ -242,6 +268,7 @@ class PlotWidgetModify(QWidget):
         self.ChangeSuperpixelAuth()
         global dicom_image_array
         global fileName_global
+        global superpixel_auth
         if fileName_global != '':
             dicom_image_array = dicom2array(pydicom.dcmread(fileName_global, force=True))
             dicom_image_array = select_RoI(dicom_image_array)            
@@ -260,7 +287,7 @@ class ImageViewer(QMainWindow):
 
         self.color_action = QAction(self)
         self.color_action.triggered.connect(self.on_color_clicked)
-        # self.bar.addAction(self.color_action)
+        self.bar.addAction(self.color_action)
         self.set_color(Qt.black)
 
         self.plotwidget_original = PlotWidgetOriginal()
@@ -273,7 +300,7 @@ class ImageViewer(QMainWindow):
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(10)
 
-        #layout2.addWidget(self.plotwidget_original)
+        # layout2.addWidget(self.plotwidget_original)
         layout2.addWidget(self.plotsuperpixelmask)
 
         self.layout.addLayout(layout2)
@@ -296,13 +323,15 @@ class ImageViewer(QMainWindow):
         
         self.createActions()
         self.createMenus()
-        self.setGeometry(600, 600, 600, 600)
+        self.setGeometry(250, 100, 1000, 600)
         self.setWindowTitle("- LAMAC -")
 
     @Slot()
     def on_color_clicked(self, layout):
-
+        global colorvec
         color = QColorDialog.getColor(Qt.black, self)
+        qcolor = QColor(color)
+        colorvec = np.array([qcolor.red(), qcolor.green(), qcolor.blue()])
         if color:
             self.set_color(color)
 
@@ -319,7 +348,6 @@ class ImageViewer(QMainWindow):
         for c in COLORS:
             b = QPaletteButton(c)
             b.pressed.connect(lambda c=c: self.canvas.set_pen_color(c))
-            layout.addWidget(b)
     def open(self):
         global fileName_global
         global dicom_image_array

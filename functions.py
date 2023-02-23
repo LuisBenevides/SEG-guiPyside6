@@ -72,7 +72,6 @@ materials = {
 def dicom2array(dcm):
     img_raw = np.float64(dcm.pixel_array)
     output = np.array( dcm.RescaleSlope * img_raw + dcm.RescaleIntercept, dtype=int )
-    print(output)
     return output
 def ConvertToUint8(dicom_image_array):
     orig_min = dicom_image_array.min()
@@ -83,17 +82,3 @@ def ConvertToUint8(dicom_image_array):
     target_min)/(orig_max-orig_min))+target_min
     dicom_image_array = dicom_image_array.astype(np.uint8)
     return dicom_image_array
-class MplToolbar(NavigationToolbar2QT):
-    def __init__(self, canvas_, parent_):
-        backend.figureoptions = None
-        self.toolitems = (
-            ('Home', 'Reset original view', 'home', 'home'),
-            ('Back', 'Back to previous view', 'back', 'back'),
-            ('Forward', 'Forward to next view', 'forward', 'forward'),
-            (None, None, None, None),
-            ('Pan', 'Pan axes with left mouse, zoom with right', 'move', 'pan'),
-            ('Zoom', 'Zoom to rectangle', 'zoom_to_rect', 'zoom'),
-            (None, None, None, None),
-            ('Save', 'Save the current image', 'filesave', 'save_figure'),
-            )
-        NavigationToolbar2QT.__init__(self, canvas_, parent_)
