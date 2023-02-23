@@ -43,6 +43,8 @@ def paintSuperPixel(x,y,segments):
         masks_empty = False
     masks = np.zeros_like(dicom_image_array, dtype="bool")
     previous_paints.append(copy.deepcopy(mask3d))
+    if(previous_paints.__len__() == 11):
+            previous_paints.__delitem__(0) 
     masks[segments == segments[int(y)][int(x)]] = 1
     # show the masked region
     # D_I_A = ((255 * dicom_image_array) * (~masks)).astype('uint8') 
