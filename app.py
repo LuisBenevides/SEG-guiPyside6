@@ -53,9 +53,11 @@ def paintSuperPixel(x,y,segments):
     mask3d[:,:,2] = colorvec[2] * masks + mask3d[:,:,2]*(~masks).astype('uint8')
     imageViewer.plotsuperpixelmask.UpdateView()
     
-fileName_global = "C:/Users/LUIAN/Desktop/SegPy/SEG-guiPyside6/images/000003.dcm"
-dicom_image_array = dicom2array(pydicom.dcmread(fileName_global, force=True))
-dicom_image_array =  ConvertToUint8(dicom_image_array)
+fileName_global = ''    
+# fileName_global = "C:/Users/LUIAN/Desktop/SegPy/SEG-guiPyside6/images/000003.dcm"
+# dicom_image_array = dicom2array(pydicom.dcmread(fileName_global, force=True))
+# dicom_image_array =  ConvertToUint8(dicom_image_array)
+dicom_image_array = []
 masks =[]
 
 COLORS = [
@@ -148,7 +150,7 @@ class PlotWidgetOriginal(QWidget):
         vlayout.addWidget(self.view)
         self.setLayout(vlayout)
 
-        self.on_change()
+        # self.on_change()
 
     def HistMethodClahe(self):
         global dicom_image_array
@@ -228,16 +230,23 @@ class PlotWidgetModify(QWidget):
         vlayout.addWidget(self.view)
         self.setLayout(vlayout)
 
-        self.on_change()
+        # self.on_change()
     def ChangeSuperpixelAuth(self):
         global superpixel_auth
         superpixel_auth = False
     def HistMethodClahe(self):
-        self.ChangeSuperpixelAuth()
-        self.axes.clear()
-        self.axes.imshow(dicom_image_array, cmap='gray')
-        self.view.draw()
+        global dicom_image_array
+        global fileName_global
+        """ Update the plot with the current input values """
+        if fileName_global != '':
+            dicom_image_array = select_RoI(dicom_image_array)
+            dicom_image_array = ConvertToUint8(dicom_image_array)
 
+            dicom_image_array = exposure.equalize_adapthist(dicom_image_array, clip_limit=0.03) 
+    
+            self.axes.clear()
+            self.axes.imshow(dicom_image_array, cmap='gray')
+            self.view.draw()
     def SuperPixel(self):
         global dicom_image_array
         global fileName_global
@@ -308,7 +317,7 @@ class ImageViewer(QMainWindow):
         self.bar.addAction(self.color_action)
         self.set_color(Qt.black)
 
-        self.plotwidget_original = PlotWidgetOriginal()
+        # self.plotwidget_original = PlotWidgetOriginal()
         self.plotwidget_modify = PlotWidgetModify()
         
         self.plotsuperpixelmask = PlotSuperPixelMask()   
@@ -369,11 +378,16 @@ class ImageViewer(QMainWindow):
     def open(self):
         global fileName_global
         global dicom_image_array
+        global mask3d
+        global masks_empty
         fileName_global = self.pathFile()
         dicom_image_array = dicom2array(pydicom.dcmread(fileName_global, force=True))
         dicom_image_array =  ConvertToUint8(dicom_image_array)
-        self.plotwidget_original.on_change()
+        # self.plotwidget_original.on_change()
         self.plotwidget_modify.on_change()
+        mask3d = []
+        masks_empty = True
+        imageViewer.plotsuperpixelmask.UpdateView()
 
     def pathFile(self):
         fileName_global, _ = QFileDialog.getOpenFileName(self, "Open File",
@@ -412,18 +426,18 @@ class ImageViewer(QMainWindow):
         self.updateActions()
 
     def HistMethodCLAHE(self):
-        self.plotwidget_original.HistMethodClahe()
+        # self.plotwidget_original.HistMethodClahe()
         self.plotwidget_modify.HistMethodClahe()
 
     def SuperPixel(self):
-        self.plotwidget_original.SuperPixel()
+        # self.plotwidget_original.SuperPixel()
         self.plotwidget_modify.SuperPixel()
         self.plotsuperpixelmask.UpdateView()
     def OriginalImage(self):
-        self.plotwidget_original.ResetDicom()
+        # self.plotwidget_original.ResetDicom()
         self.plotwidget_modify.ResetDicom()
     def RemoveObjects(self):
-        self.plotwidget_original.DeleteObjects()
+        # self.plotwidget_original.DeleteObjects()
         self.plotwidget_modify.DeleteObjects()     
     def about(self):
         QMessageBox.about(self, "LAMAC",
