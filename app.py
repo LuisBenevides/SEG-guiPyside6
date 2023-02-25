@@ -11,12 +11,20 @@ from functions import *
 import copy
 from PIL import Image
 from os import path
+
+# The superpixel mask is here
 segments_global = []
+# The Painted(rgb) mask is here
 mask3d  = []
+# The backups mask3d is here. Is used to rollback in case of wrong paints.
 previous_paints = []
+# Defines if the paint are enabled
 superpixel_auth = False
+# Defines the current color of the superpixel paint
 colorvec = np.array([0, 0, 0])
+# Defines if the 'mask3d' or 'masks' variables needs to be created again
 masks_empty = True
+# Click event for paint superpixel
 def mouse_event(event):
     global segments_global
     global superpixel_auth
@@ -36,28 +44,44 @@ def paintSuperPixel(x,y,segments):
     global colorvec
     global masks_empty
     if(masks_empty):
+        # Creates a new 3d mask with the shape of the dicom image array
         mask3d = np.zeros((dicom_image_array.shape[0],dicom_image_array.shape[1],3), dtype = "uint8")
         mask3d[:,:,0] = 255 * dicom_image_array 
         mask3d[:,:,1] = 255 * dicom_image_array 
         mask3d[:,:,2] = 255 * dicom_image_array
         masks_empty = False
     masks = np.zeros_like(dicom_image_array, dtype="bool")
+    # Store a copy of mask3d for rollback
     previous_paints.append(copy.deepcopy(mask3d))
+    # Verify if exists more than 10 copies, for delete the older
     if(previous_paints.__len__() == 11):
             previous_paints.__delitem__(0) 
+    # Verify what segments of segments global are equals to 
+    # the clicked segment to change this masks elements to 1, 
+    # instead of false
     masks[segments == segments[int(y)][int(x)]] = 1
     # show the masked region
-    # D_I_A = ((255 * dicom_image_array) * (~masks)).astype('uint8') 
+    ## D_I_A = ((255 * dicom_image_array) * (~masks)).astype('uint8') 
+
+    # Ranges the array, painting each layer of rgb with the color choosed
+    # in the colorvec
     mask3d[:,:,0] = colorvec[0] * masks + mask3d[:,:,0]*(~masks).astype('uint8')
     mask3d[:,:,1] = colorvec[1] * masks + mask3d[:,:,1]*(~masks).astype('uint8')
     mask3d[:,:,2] = colorvec[2] * masks + mask3d[:,:,2]*(~masks).astype('uint8')
-    imageViewer.plotsuperpixelmask.UpdateView()
     
+    # Update the mask with the new rgb mask(with the new painted superpixel)
+    imageViewer.plotsuperpixelmask.UpdateView()
+
+# Here are stored the path of the opened file    
 fileName_global = ''    
 # fileName_global = "C:/Users/LUIAN/Desktop/SegPy/SEG-guiPyside6/images/000003.dcm"
 # dicom_image_array = dicom2array(pydicom.dcmread(fileName_global, force=True))
 # dicom_image_array =  ConvertToUint8(dicom_image_array)
+
+# Here are stored the array of the dicom image(both original, 
+# with removed objects and with CLAHE applied)
 dicom_image_array = []
+
 masks =[]
 
 COLORS = [
@@ -75,6 +99,7 @@ COLORS = [
     '#232328'
 ]
 
+# Class of the toolbar of the ploted image
 class MplToolbar(NavigationToolbar2QT):
     def __init__(self, canvas_, parent_):
         backend.figureoptions = None
@@ -89,17 +114,26 @@ class MplToolbar(NavigationToolbar2QT):
             ('Save', 'Save the current image', 'filesave', 'save_mask'),
             )
         NavigationToolbar2QT.__init__(self, canvas_, parent_)
+    # Function to save the mask to png
     def save_mask(self):
+        # Prevent the error throwed by convert a empty array to an array
         if(not np.array_equal(mask3d, [])):
             file_number = 1
+
+            # Converts the mask 3d to an image
             img = Image.fromarray(mask3d, 'RGB')
             
+            # Chooses the correct name(according with the existing, adding
+            # +1 to the number identify if this filename already exists)
             if(path.exists("mask.png")):
                 while(path.exists(f'mask{str(file_number)}.png')):
                     file_number +=1
 
                 img.save(f'mask{str(file_number)}.png')
             img.save('mask.png')
+
+    # Rollbacks a state of the paint, copying the saved mask to the mask3d
+    # deleting the copied and updating the view to the new mask with rollback
     def back_paint(self):
         global previous_paints 
         global mask3d
@@ -107,6 +141,8 @@ class MplToolbar(NavigationToolbar2QT):
             mask3d = copy.deepcopy(previous_paints[(previous_paints.__len__()-1)])
             previous_paints.__delitem__(previous_paints.__len__() -1)
             imageViewer.plotsuperpixelmask.UpdateView()
+
+# Class that shows the painted image
 class PlotSuperPixelMask(QWidget):
     def __init__(self):
         super().__init__()
