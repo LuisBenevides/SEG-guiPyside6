@@ -137,9 +137,14 @@ class MplToolbar(NavigationToolbar2QT):
     def back_paint(self):
         global previous_paints 
         global mask3d
+
+        # Checks if have backups of masks 3d to rollback
         if(previous_paints.__len__() >= 1):  
+            # Copy the backup mask to the mask3d variable
             mask3d = copy.deepcopy(previous_paints[(previous_paints.__len__()-1)])
+            # Delete the rollbacked mask
             previous_paints.__delitem__(previous_paints.__len__() -1)
+            # Update the view
             imageViewer.plotsuperpixelmask.UpdateView()
 
 # Class that shows the painted image
@@ -148,23 +153,29 @@ class PlotSuperPixelMask(QWidget):
         super().__init__()
         self.view = FigureCanvas(Figure(figsize=(5, 3)))
         self.axes = self.view.figure.subplots()
+        # Includes the toolbar
         self.toolbar = MplToolbar(self.view, self)
+        # Create the event associated with a function on click
         self.view.mpl_connect('button_press_event', mouse_event)
         vlayout = QVBoxLayout()
         vlayout.addWidget(self.toolbar)
         vlayout.addWidget(self.view)
         self.setLayout(vlayout) 
+    # Update the view, displaying the mask3d(if modified, shows the new mask)
     def UpdateView(self):
         global mask3d
         if (not masks_empty):
+            # Clear previous views
             self.axes.clear()
+            # Shows the new view
             self.axes.imshow(mask3d, cmap='gray')
             self.view.draw()
+    # Self explanatory
     def ClearView(self):
         self.axes.clear()
 
 
-
+# Class that create the Pallete of collors to choose for paint
 class QPaletteButton(QPushButton):
 
     def __init__(self, color):
@@ -172,7 +183,7 @@ class QPaletteButton(QPushButton):
         self.setFixedSize(QtCore.QSize(24,24))
         self.color = color
         self.setStyleSheet("background-color: %s;" % color)
-
+# Not used in moment, but is very similar to 'PlotWidgetModify' class
 class PlotWidgetOriginal(QWidget):
     def __init__(self):
         super().__init__()
@@ -252,8 +263,10 @@ class PlotWidgetOriginal(QWidget):
 
 
 
-
+# Class that shows the tomography with 'remove objects', 'CLAHE' and 
+# superpixels borders
 class PlotWidgetModify(QWidget):
+    # Very similar with 'PlotSuperpixelMask' class
     def __init__(self):
         super().__init__()
         self.segments =[]
@@ -267,22 +280,25 @@ class PlotWidgetModify(QWidget):
         self.setLayout(vlayout)
 
         # self.on_change()
+
+    # Self explanatory
     def ChangeSuperpixelAuth(self):
         global superpixel_auth
         superpixel_auth = False
+    
+    #  Apply the CLAHE method, that makes the tomography clearer
     def HistMethodClahe(self):
         global dicom_image_array
         global fileName_global
-        """ Update the plot with the current input values """
+        # Just executes the method if exists an opened image
         if fileName_global != '':
-            dicom_image_array = select_RoI(dicom_image_array)
-            dicom_image_array = ConvertToUint8(dicom_image_array)
-
+            # Method that makes the CLAHE
             dicom_image_array = exposure.equalize_adapthist(dicom_image_array, clip_limit=0.03) 
-    
             self.axes.clear()
             self.axes.imshow(dicom_image_array, cmap='gray')
             self.view.draw()
+    
+    # Apply the superpixel segmentation to the current dicom image array
     def SuperPixel(self):
         global dicom_image_array
         global fileName_global
@@ -301,7 +317,7 @@ class PlotWidgetModify(QWidget):
         superpixel_auth = True
 
 
-
+    # Refresh the dicom image array
     def on_change(self):
         self.ChangeSuperpixelAuth()
         global dicom_image_array
@@ -316,24 +332,32 @@ class PlotWidgetModify(QWidget):
             self.axes.imshow(dicom_image_array, cmap='gray')
             self.view.draw()
 
+    # Reset the dicom image array
     def ResetDicom(self):
         self.ChangeSuperpixelAuth()
         global dicom_image_array
         global fileName_global
         global superpixel_auth
         if fileName_global != '':
+            # Read the dicom image again
             dicom_image_array = dicom2array(pydicom.dcmread(fileName_global, force=True))
+            # Convert to uint8 to display again
             dicom_image_array = ConvertToUint8(dicom_image_array)
         self.axes.imshow(dicom_image_array, cmap='gray')
         self.view.draw()
         superpixel_auth = False
+
+    # Apply the delete objects method(removes unwanted objects)
     def DeleteObjects(self):
+        """This method reset the dicom image, reading the original image again.
+        So, the CLAHE method needs to be applied after this method."""
         self.ChangeSuperpixelAuth()
         global dicom_image_array
         global fileName_global
         global superpixel_auth
         if fileName_global != '':
             dicom_image_array = dicom2array(pydicom.dcmread(fileName_global, force=True))
+            # The function that makes the method
             dicom_image_array = select_RoI(dicom_image_array)            
             dicom_image_array = ConvertToUint8(dicom_image_array)
 
@@ -341,6 +365,7 @@ class PlotWidgetModify(QWidget):
         self.view.draw()
         superpixel_auth = False
 
+# Class that manage the layout of the window.
 class ImageViewer(QMainWindow):
     def __init__(self):
         super(ImageViewer, self).__init__()
