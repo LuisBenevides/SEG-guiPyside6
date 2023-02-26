@@ -21,7 +21,7 @@ previous_paints = []
 # Defines if the paint are enabled
 superpixel_auth = False
 # Defines the current color of the superpixel paint
-colorvec = np.array([0, 0, 0])
+colorvec = np.array([255, 255, 0])
 # Defines if the 'mask3d' or 'masks' variables needs to be created again
 masks_empty = True
 # Click event for paint superpixel
@@ -130,7 +130,9 @@ class MplToolbar(NavigationToolbar2QT):
                     file_number +=1
 
                 img.save(f'mask{str(file_number)}.png')
-            img.save('mask.png')
+            else:
+
+                img.save('mask.png')
 
     # Rollbacks a state of the paint, copying the saved mask to the mask3d
     # deleting the copied and updating the view to the new mask with rollback
@@ -376,11 +378,15 @@ class ImageViewer(QMainWindow):
         self.color_action = QAction(self)
         self.color_action.triggered.connect(self.on_color_clicked)
         self.bar.addAction(self.color_action)
-        self.set_color(Qt.black)
+        # Put yellow as default color to paint
+        self.set_color(Qt.yellow)
 
         # self.plotwidget_original = PlotWidgetOriginal()
+
+        # Store the instanced object of the widget modified class
         self.plotwidget_modify = PlotWidgetModify()
         
+        # Store the instanced object of the painted mask class
         self.plotsuperpixelmask = PlotSuperPixelMask()   
         self.layout = QHBoxLayout()
         layout2 = QVBoxLayout()
@@ -389,9 +395,13 @@ class ImageViewer(QMainWindow):
         self.layout.setSpacing(10)
 
         # layout2.addWidget(self.plotwidget_original)
+
+        # Shows the painted mask instanced class in the app layout
         layout2.addWidget(self.plotsuperpixelmask)
 
         self.layout.addLayout(layout2)
+
+        # Shows the widget modified class in the app layout
         layout3.addWidget(self.plotwidget_modify)
 
         self.layout.addLayout(layout3)
@@ -400,6 +410,8 @@ class ImageViewer(QMainWindow):
         palette = QHBoxLayout()
         self.add_palette_buttons(palette)
 
+        # Shows the main layout, that contains the other 2(superpixel 
+        # and modified)
         main_widget = QWidget()
         main_widget.setLayout(self.layout)
         self.setCentralWidget(main_widget)
@@ -411,20 +423,27 @@ class ImageViewer(QMainWindow):
         
         self.createActions()
         self.createMenus()
+
+        # Create the size of the layout
         self.setGeometry(250, 100, 1000, 600)
         self.setWindowTitle("- LAMAC -")
 
     @Slot()
     def on_color_clicked(self, layout):
+        """When a color is changed, this function is activated and 
+        changes the 'colorvec' global variable that stores the current
+        color for paint"""
         global colorvec
         color = QColorDialog.getColor(Qt.black, self)
         qcolor = QColor(color)
+
+        # Put the RGB colors in the 'colorvec' global variable
         colorvec = np.array([qcolor.red(), qcolor.green(), qcolor.blue()])
         if color:
             self.set_color(color)
 
     def set_color(self, color: QColor = Qt.black):
-        # Create color icon
+        """ Changes the color icon for the selected """
         pix_icon = QPixmap(20, 20)
         pix_icon.fill(color)
 
@@ -436,7 +455,9 @@ class ImageViewer(QMainWindow):
         for c in COLORS:
             b = QPaletteButton(c)
             b.pressed.connect(lambda c=c: self.canvas.set_pen_color(c))
+    
     def open(self):
+        """Open the interface to choose the file to display in the app"""
         global fileName_global
         global dicom_image_array
         global mask3d
@@ -451,6 +472,7 @@ class ImageViewer(QMainWindow):
         imageViewer.plotsuperpixelmask.UpdateView()
 
     def pathFile(self):
+        """Get the path of the selected file"""
         fileName_global, _ = QFileDialog.getOpenFileName(self, "Open File",
                                                          QDir.currentPath(), filter="DICOM (*.dcm *.)")
         return fileName_global
@@ -486,10 +508,11 @@ class ImageViewer(QMainWindow):
 
         self.updateActions()
 
+    #Follow methods are self explanatory
     def HistMethodCLAHE(self):
         # self.plotwidget_original.HistMethodClahe()
         self.plotwidget_modify.HistMethodClahe()
-
+    
     def SuperPixel(self):
         # self.plotwidget_original.SuperPixel()
         self.plotwidget_modify.SuperPixel()
@@ -508,6 +531,7 @@ class ImageViewer(QMainWindow):
         self.SuperPixel()
 
     def createActions(self):
+        """Create the actions to put in menu options"""
         self.openAct = QtGui.QAction("&Open...", self, shortcut="Ctrl+O",
                                      triggered=self.open)
         self.exitAct = QtGui.QAction("E&xit", self, shortcut="Ctrl+Q",
@@ -538,6 +562,7 @@ class ImageViewer(QMainWindow):
                                         triggered=qApp.aboutQt)
 
     def createMenus(self):
+        """Put the created actions in a menu"""
         self.fileMenu = QMenu("&File", self)
         self.fileMenu.addAction(self.openAct)
         self.fileMenu.addSeparator()
@@ -584,6 +609,7 @@ class ImageViewer(QMainWindow):
 if __name__ == '__main__':
     import sys
 
+    # Instances the app and shows the main class
     app = QApplication(sys.argv)
     imageViewer = ImageViewer()
     imageViewer.show()
