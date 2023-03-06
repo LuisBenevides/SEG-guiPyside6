@@ -1,4 +1,4 @@
-from PySide6 import QtCore, QtGui
+from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtWidgets import *
 from PySide6.QtGui import *
 from PySide6.QtCore import *
@@ -24,6 +24,9 @@ superpixel_auth = False
 colorvec = np.array([255, 255, 0])
 # Defines if the 'mask3d' or 'masks' variables needs to be created again
 masks_empty = True
+# Aproximated number of superpixels segments
+numSegments = 2000
+
 # Click event for paint superpixel
 def mouse_event(event):
     global segments_global
@@ -306,9 +309,9 @@ class PlotWidgetModify(QWidget):
         global fileName_global
         global segments_global
         global superpixel_auth
+        global numSegments
         sigma_slic = 1
         compactness = 0.05
-        numSegments = 2000
         method = 'gaussian'
         # apply SLIC and extract (approximately) the supplied number of segments
         segments_global = slic(dicom_image_array, n_segments=numSegments, sigma=sigma_slic, \
@@ -530,6 +533,12 @@ class ImageViewer(QMainWindow):
     def the_button_was_clicked(self):
         self.SuperPixel()
 
+    def changeNumSegments(self):
+        global numSegments
+        superpixelsNumber, ok = QInputDialog.getInt(self, "Número de SuperPixels",
+                                "SuperPixels", QLineEdit.Normal)
+        numSegments = superpixelsNumber
+        
     def createActions(self):
         """Create the actions to put in menu options"""
         self.openAct = QtGui.QAction("&Open...", self, shortcut="Ctrl+O",
@@ -560,6 +569,8 @@ class ImageViewer(QMainWindow):
 
         self.aboutQtAct = QtGui.QAction("About &Qt", self,
                                         triggered=qApp.aboutQt)
+        self.changeNumSegmentsAct = QtGui.QAction("&Change amount of superpixels", self, shortcut="Ctrl+1",
+                                     triggered=self.changeNumSegments)
 
     def createMenus(self):
         """Put the created actions in a menu"""
@@ -574,7 +585,11 @@ class ImageViewer(QMainWindow):
         self.viewMenu.addAction(self.normalSizeAct)
         # self.viewMenu.addAction(self.HistMethodAct)
         self.viewMenu.addAction(self.HistMethodCLAHEAct)
+        self.viewMenu.addSeparator()
         self.viewMenu.addAction(self.SuperPixelAct)
+        
+        self.viewMenu.addAction(self.changeNumSegmentsAct)
+        self.viewMenu.addSeparator()
         self.viewMenu.addAction(self.OriginalImageAct)
         self.viewMenu.addAction(self.RemoveObjectsAct)
         self.viewMenu.addSeparator()
