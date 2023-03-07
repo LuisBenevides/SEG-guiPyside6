@@ -537,7 +537,8 @@ class ImageViewer(QMainWindow):
         global numSegments
         superpixelsNumber, ok = QInputDialog.getInt(self, "Número de SuperPixels",
                                 "SuperPixels", QLineEdit.Normal)
-        numSegments = superpixelsNumber
+        if(ok):
+            numSegments = superpixelsNumber
         
     def createActions(self):
         """Create the actions to put in menu options"""
