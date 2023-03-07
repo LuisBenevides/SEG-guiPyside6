@@ -11,7 +11,7 @@ from functions import *
 import copy
 from PIL import Image
 from os import path
-#
+
 # The superpixel mask is here
 segments_global = []
 # The Painted(rgb) mask is here
