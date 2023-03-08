@@ -125,17 +125,17 @@ class MplToolbar(NavigationToolbar2QT):
 
             # Converts the mask 3d to an image
             img = Image.fromarray(mask3d, 'RGB')
-            
+            filename = path.basename(fileName_global).split(".")[0]
             # Chooses the correct name(according with the existing, adding
             # +1 to the number identify if this filename already exists)
-            if(path.exists("mask.png")):
-                while(path.exists(f'mask{str(file_number)}.png')):
+            if(path.exists(f'{filename}.png')):
+                while(path.exists(f'{filename}({str(file_number)}).png')):
                     file_number +=1
 
-                img.save(f'mask{str(file_number)}.png')
+                img.save(f'{filename}({str(file_number)}).png')
             else:
 
-                img.save('mask.png')
+                img.save(f'{filename}.png')
 
     # Rollbacks a state of the paint, copying the saved mask to the mask3d
     # deleting the copied and updating the view to the new mask with rollback
@@ -439,11 +439,11 @@ class ImageViewer(QMainWindow):
         global colorvec
         color = QColorDialog.getColor(Qt.black, self)
         qcolor = QColor(color)
-
-        # Put the RGB colors in the 'colorvec' global variable
-        colorvec = np.array([qcolor.red(), qcolor.green(), qcolor.blue()])
-        if color:
+        if qcolor.red() != 0 or qcolor.green() != 0 or qcolor.blue() != 0:
+            # Put the RGB colors in the 'colorvec' global variable
+            colorvec = np.array([qcolor.red(), qcolor.green(), qcolor.blue()])
             self.set_color(color)
+            self.resetMask3d()
 
     def set_color(self, color: QColor = Qt.black):
         """ Changes the color icon for the selected """
@@ -539,6 +539,19 @@ class ImageViewer(QMainWindow):
                                 "SuperPixels", QLineEdit.Normal)
         if(ok):
             numSegments = superpixelsNumber
+    def resetMask3d(self):
+        global mask3d
+        global previous_paints
+        global masks_empty
+        if(not np.array_equal(dicom_image_array, [])):
+            previous_paints = []
+            mask3d = np.zeros((dicom_image_array.shape[0],dicom_image_array.shape[1],3), dtype = "uint8")
+            mask3d[:,:,0] = 255 * dicom_image_array 
+            mask3d[:,:,1] = 255 * dicom_image_array 
+            mask3d[:,:,2] = 255 * dicom_image_array
+            masks_empty = False
+            previous_paints.append(copy.deepcopy(mask3d))
+            imageViewer.plotsuperpixelmask.UpdateView()
         
     def createActions(self):
         """Create the actions to put in menu options"""
