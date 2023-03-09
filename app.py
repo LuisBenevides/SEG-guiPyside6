@@ -470,10 +470,11 @@ class ImageViewer(QMainWindow):
         dicom_image_array =  ConvertToUint8(dicom_image_array)
         # self.plotwidget_original.on_change()
         self.plotwidget_modify.on_change()
+        mask3d = copy.deepcopy(dicom_image_array)
+        masks_empty = False
+        imageViewer.plotsuperpixelmask.UpdateView()
         mask3d = []
         masks_empty = True
-        imageViewer.plotsuperpixelmask.UpdateView()
-
     def pathFile(self):
         """Get the path of the selected file"""
         fileName_global, _ = QFileDialog.getOpenFileName(self, "Open File",
