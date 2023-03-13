@@ -121,21 +121,23 @@ class MplToolbar(NavigationToolbar2QT):
     def save_mask(self):
         # Prevent the error throwed by convert a empty array to an array
         if(not np.array_equal(mask3d, [])):
-            file_number = 1
+            item, ok = QInputDialog.getItem(self, "select input dialog", "list of regions", ("Fat", "Bone", "Muscle"), 0, False)
+            if ok:
+                file_number = 1
 
-            # Converts the mask 3d to an image
-            img = Image.fromarray(mask3d, 'RGB')
-            filename = path.basename(fileName_global).split(".")[0]
-            # Chooses the correct name(according with the existing, adding
-            # +1 to the number identify if this filename already exists)
-            if(path.exists(f'{filename}.png')):
-                while(path.exists(f'{filename}({str(file_number)}).png')):
-                    file_number +=1
+                # Converts the mask 3d to an image
+                img = Image.fromarray(mask3d, 'RGB')
+                filename = path.basename(fileName_global).split(".")[0]
+                # Chooses the correct name(according with the existing, adding
+                # +1 to the number identify if this filename already exists)
+                if(path.exists(f'{filename}({item}).png')):
+                    while(path.exists(f'{filename}({item})({str(file_number)}).png')):
+                        file_number +=1
 
-                img.save(f'{filename}({str(file_number)}).png')
-            else:
+                    img.save(f'{filename}({item})({str(file_number)}).png')
+                else:
 
-                img.save(f'{filename}.png')
+                    img.save(f'{filename}({item}).png')   
 
     # Rollbacks a state of the paint, copying the saved mask to the mask3d
     # deleting the copied and updating the view to the new mask with rollback
