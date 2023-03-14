@@ -177,6 +177,11 @@ class PlotSuperPixelMask(QWidget):
             # Shows the new view
             self.axes.imshow(mask3d, cmap='gray')
             self.view.draw()
+        else:
+            self.axes.clear()
+            self.axes.imshow(dicom_image_array, cmap='gray')
+            self.view.draw()
+    
     # Self explanatory
     def ClearView(self):
         self.axes.clear()
@@ -297,6 +302,7 @@ class PlotWidgetModify(QWidget):
     def HistMethodClahe(self):
         global dicom_image_array
         global fileName_global
+        global superpixel_auth
         # Just executes the method if exists an opened image
         if fileName_global != '':
             # Method that makes the CLAHE
@@ -304,6 +310,7 @@ class PlotWidgetModify(QWidget):
             self.axes.clear()
             self.axes.imshow(dicom_image_array, cmap='gray')
             self.view.draw()
+            superpixel_auth = False
     
     # Apply the superpixel segmentation to the current dicom image array
     def SuperPixel(self):
@@ -521,14 +528,20 @@ class ImageViewer(QMainWindow):
     
     def SuperPixel(self):
         # self.plotwidget_original.SuperPixel()
-        self.plotwidget_modify.SuperPixel()
-        self.plotsuperpixelmask.UpdateView()
+        if not np.array_equal(dicom_image_array, []):
+            self.plotwidget_modify.SuperPixel()
+            self.plotsuperpixelmask.UpdateView()
     def OriginalImage(self):
+        global fileName_global
         # self.plotwidget_original.ResetDicom()
-        self.plotwidget_modify.ResetDicom()
+        if fileName_global != '':
+            self.plotwidget_modify.ResetDicom()
     def RemoveObjects(self):
+        global dicom_image_array
         # self.plotwidget_original.DeleteObjects()
-        self.plotwidget_modify.DeleteObjects()     
+        if not np.array_equal(dicom_image_array, []):
+            self.plotwidget_modify.DeleteObjects()
+            self.plotsuperpixelmask.UpdateView()     
     def about(self):
         QMessageBox.about(self, "LAMAC",
                           "<p>Segmentador Manual !!! </p>")
