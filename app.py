@@ -36,6 +36,8 @@ def mouse_event(event):
     and (superpixel_auth == True) 
     and (str(imageViewer.plotsuperpixelmask.toolbar._actions["zoom"]).__contains__("checked=false"))
     and (str(imageViewer.plotwidget_modify.toolbar._actions["zoom"]).__contains__("checked=false"))
+    and (str(imageViewer.plotsuperpixelmask.toolbar._actions["pan"]).__contains__("checked=false"))
+    and (str(imageViewer.plotwidget_modify.toolbar._actions["pan"]).__contains__("checked=false"))
     ):
         paintSuperPixel(event.xdata,event.ydata,segments_global)
 
@@ -121,21 +123,23 @@ class MplToolbar(NavigationToolbar2QT):
     def save_mask(self):
         # Prevent the error throwed by convert a empty array to an array
         if(not np.array_equal(mask3d, [])):
-            file_number = 1
+            item, ok = QInputDialog.getItem(self, "Select the painted region", "List of regions", ("Fat", "Bone", "Muscle"), 0, False)
+            if ok:
+                file_number = 1
 
-            # Converts the mask 3d to an image
-            img = Image.fromarray(mask3d, 'RGB')
-            
-            # Chooses the correct name(according with the existing, adding
-            # +1 to the number identify if this filename already exists)
-            if(path.exists("mask.png")):
-                while(path.exists(f'mask{str(file_number)}.png')):
-                    file_number +=1
+                # Converts the mask 3d to an image
+                img = Image.fromarray(mask3d, 'RGB')
+                filename = path.basename(fileName_global).split(".")[0]
+                # Chooses the correct name(according with the existing, adding
+                # +1 to the number identify if this filename already exists)
+                if(path.exists(f'{filename}({item}).png')):
+                    while(path.exists(f'{filename}({item})({str(file_number)}).png')):
+                        file_number +=1
 
-                img.save(f'mask{str(file_number)}.png')
-            else:
+                    img.save(f'{filename}({item})({str(file_number)}).png')
+                else:
 
-                img.save('mask.png')
+                    img.save(f'{filename}({item}).png')   
 
     # Rollbacks a state of the paint, copying the saved mask to the mask3d
     # deleting the copied and updating the view to the new mask with rollback
@@ -169,12 +173,19 @@ class PlotSuperPixelMask(QWidget):
     # Update the view, displaying the mask3d(if modified, shows the new mask)
     def UpdateView(self):
         global mask3d
+        global masks_empty
+        global dicom_image_array
         if (not masks_empty):
             # Clear previous views
             self.axes.clear()
             # Shows the new view
             self.axes.imshow(mask3d, cmap='gray')
             self.view.draw()
+        else:
+            self.axes.clear()
+            self.axes.imshow(dicom_image_array, cmap='gray')
+            self.view.draw()
+    
     # Self explanatory
     def ClearView(self):
         self.axes.clear()
@@ -295,6 +306,7 @@ class PlotWidgetModify(QWidget):
     def HistMethodClahe(self):
         global dicom_image_array
         global fileName_global
+        global superpixel_auth
         # Just executes the method if exists an opened image
         if fileName_global != '':
             # Method that makes the CLAHE
@@ -302,6 +314,7 @@ class PlotWidgetModify(QWidget):
             self.axes.clear()
             self.axes.imshow(dicom_image_array, cmap='gray')
             self.view.draw()
+            superpixel_auth = False
     
     # Apply the superpixel segmentation to the current dicom image array
     def SuperPixel(self):
@@ -439,11 +452,11 @@ class ImageViewer(QMainWindow):
         global colorvec
         color = QColorDialog.getColor(Qt.black, self)
         qcolor = QColor(color)
-
-        # Put the RGB colors in the 'colorvec' global variable
-        colorvec = np.array([qcolor.red(), qcolor.green(), qcolor.blue()])
-        if color:
+        if qcolor.red() != 0 or qcolor.green() != 0 or qcolor.blue() != 0:
+            # Put the RGB colors in the 'colorvec' global variable
+            colorvec = np.array([qcolor.red(), qcolor.green(), qcolor.blue()])
             self.set_color(color)
+            self.resetMask3d()
 
     def set_color(self, color: QColor = Qt.black):
         """ Changes the color icon for the selected """
@@ -470,10 +483,11 @@ class ImageViewer(QMainWindow):
         dicom_image_array =  ConvertToUint8(dicom_image_array)
         # self.plotwidget_original.on_change()
         self.plotwidget_modify.on_change()
+        mask3d = copy.deepcopy(dicom_image_array)
+        masks_empty = False
+        imageViewer.plotsuperpixelmask.UpdateView()
         mask3d = []
         masks_empty = True
-        imageViewer.plotsuperpixelmask.UpdateView()
-
     def pathFile(self):
         """Get the path of the selected file"""
         fileName_global, _ = QFileDialog.getOpenFileName(self, "Open File",
@@ -513,19 +527,30 @@ class ImageViewer(QMainWindow):
 
     #Follow methods are self explanatory
     def HistMethodCLAHE(self):
-        # self.plotwidget_original.HistMethodClahe()
-        self.plotwidget_modify.HistMethodClahe()
+        global dicom_image_array
+        if not np.array_equal(dicom_image_array, []):
+            # self.plotwidget_original.HistMethodClahe()
+            self.plotwidget_modify.HistMethodClahe()
+            self.plotsuperpixelmask.UpdateView()
     
     def SuperPixel(self):
+        global dicom_image_array
         # self.plotwidget_original.SuperPixel()
-        self.plotwidget_modify.SuperPixel()
-        self.plotsuperpixelmask.UpdateView()
+        if not np.array_equal(dicom_image_array, []):
+            self.plotwidget_modify.SuperPixel()
+            self.plotsuperpixelmask.UpdateView()
     def OriginalImage(self):
+        global fileName_global
         # self.plotwidget_original.ResetDicom()
-        self.plotwidget_modify.ResetDicom()
+        if fileName_global != '':
+            self.plotwidget_modify.ResetDicom()
+            self.plotsuperpixelmask.UpdateView()
     def RemoveObjects(self):
+        global dicom_image_array
         # self.plotwidget_original.DeleteObjects()
-        self.plotwidget_modify.DeleteObjects()     
+        if not np.array_equal(dicom_image_array, []):
+            self.plotwidget_modify.DeleteObjects()
+            self.plotsuperpixelmask.UpdateView()     
     def about(self):
         QMessageBox.about(self, "LAMAC",
                           "<p>Segmentador Manual !!! </p>")
@@ -539,6 +564,19 @@ class ImageViewer(QMainWindow):
                                 "SuperPixels", QLineEdit.Normal)
         if(ok):
             numSegments = superpixelsNumber
+    def resetMask3d(self):
+        global mask3d
+        global previous_paints
+        global masks_empty
+        if(not np.array_equal(dicom_image_array, [])):
+            previous_paints = []
+            mask3d = np.zeros((dicom_image_array.shape[0],dicom_image_array.shape[1],3), dtype = "uint8")
+            mask3d[:,:,0] = 255 * dicom_image_array 
+            mask3d[:,:,1] = 255 * dicom_image_array 
+            mask3d[:,:,2] = 255 * dicom_image_array
+            masks_empty = False
+            previous_paints.append(copy.deepcopy(mask3d))
+            imageViewer.plotsuperpixelmask.UpdateView()
         
     def createActions(self):
         """Create the actions to put in menu options"""
