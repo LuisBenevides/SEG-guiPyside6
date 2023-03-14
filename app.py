@@ -36,6 +36,8 @@ def mouse_event(event):
     and (superpixel_auth == True) 
     and (str(imageViewer.plotsuperpixelmask.toolbar._actions["zoom"]).__contains__("checked=false"))
     and (str(imageViewer.plotwidget_modify.toolbar._actions["zoom"]).__contains__("checked=false"))
+    and (str(imageViewer.plotsuperpixelmask.toolbar._actions["pan"]).__contains__("checked=false"))
+    and (str(imageViewer.plotwidget_modify.toolbar._actions["pan"]).__contains__("checked=false"))
     ):
         paintSuperPixel(event.xdata,event.ydata,segments_global)
 
@@ -121,7 +123,7 @@ class MplToolbar(NavigationToolbar2QT):
     def save_mask(self):
         # Prevent the error throwed by convert a empty array to an array
         if(not np.array_equal(mask3d, [])):
-            item, ok = QInputDialog.getItem(self, "select input dialog", "list of regions", ("Fat", "Bone", "Muscle"), 0, False)
+            item, ok = QInputDialog.getItem(self, "Select the painted region", "List of regions", ("Fat", "Bone", "Muscle"), 0, False)
             if ok:
                 file_number = 1
 
@@ -171,6 +173,8 @@ class PlotSuperPixelMask(QWidget):
     # Update the view, displaying the mask3d(if modified, shows the new mask)
     def UpdateView(self):
         global mask3d
+        global masks_empty
+        global dicom_image_array
         if (not masks_empty):
             # Clear previous views
             self.axes.clear()
@@ -523,10 +527,14 @@ class ImageViewer(QMainWindow):
 
     #Follow methods are self explanatory
     def HistMethodCLAHE(self):
-        # self.plotwidget_original.HistMethodClahe()
-        self.plotwidget_modify.HistMethodClahe()
+        global dicom_image_array
+        if not np.array_equal(dicom_image_array, []):
+            # self.plotwidget_original.HistMethodClahe()
+            self.plotwidget_modify.HistMethodClahe()
+            self.plotsuperpixelmask.UpdateView()
     
     def SuperPixel(self):
+        global dicom_image_array
         # self.plotwidget_original.SuperPixel()
         if not np.array_equal(dicom_image_array, []):
             self.plotwidget_modify.SuperPixel()
@@ -536,6 +544,7 @@ class ImageViewer(QMainWindow):
         # self.plotwidget_original.ResetDicom()
         if fileName_global != '':
             self.plotwidget_modify.ResetDicom()
+            self.plotsuperpixelmask.UpdateView()
     def RemoveObjects(self):
         global dicom_image_array
         # self.plotwidget_original.DeleteObjects()
