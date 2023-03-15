@@ -38,7 +38,7 @@ def mouse_event(event):
     and (str(imageViewer.plotwidget_modify.toolbar._actions["zoom"]).__contains__("checked=false"))
     and (str(imageViewer.plotsuperpixelmask.toolbar._actions["pan"]).__contains__("checked=false"))
     and (str(imageViewer.plotwidget_modify.toolbar._actions["pan"]).__contains__("checked=false"))
-    ):
+    ): 
         paintSuperPixel(event.xdata,event.ydata,segments_global)
 
 def paintSuperPixel(x,y,segments):
@@ -175,11 +175,12 @@ class PlotSuperPixelMask(QWidget):
         global mask3d
         global masks_empty
         global dicom_image_array
+        global segments_global
         if (not masks_empty):
             # Clear previous views
             self.axes.clear()
             # Shows the new view
-            self.axes.imshow(mask3d, cmap='gray')
+            self.axes.imshow(mark_boundaries(mask3d, segments_global))
             self.view.draw()
         else:
             self.axes.clear()
@@ -189,6 +190,27 @@ class PlotSuperPixelMask(QWidget):
     # Self explanatory
     def ClearView(self):
         self.axes.clear()
+    # Apply the superpixel segmentation to the current dicom image array
+    def SuperPixel(self):
+        global dicom_image_array
+        global fileName_global
+        global segments_global
+        global superpixel_auth
+        global numSegments
+        global mask3d
+        sigma_slic = 1
+        compactness = 0.05
+        method = 'gaussian'
+        # apply SLIC and extract (approximately) the supplied number of segments
+        segments_global = slic(dicom_image_array, n_segments=numSegments, sigma=sigma_slic, \
+                        multichannel=False, compactness=compactness, start_label=1)
+        self.axes.clear()
+        if(not np.array_equal(mask3d, [])):
+                    self.axes.imshow(mark_boundaries(mask3d, segments_global))
+        else:
+            self.axes.imshow(mark_boundaries(dicom_image_array, segments_global))
+        self.view.draw()
+        superpixel_auth = True
 
 
 # Class that create the Pallete of collors to choose for paint
@@ -199,85 +221,6 @@ class QPaletteButton(QPushButton):
         self.setFixedSize(QtCore.QSize(24,24))
         self.color = color
         self.setStyleSheet("background-color: %s;" % color)
-# Not used in moment, but is very similar to 'PlotWidgetModify' class
-class PlotWidgetOriginal(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.segments =[]
-        self.view = FigureCanvas(Figure(figsize=(5, 3)))
-        self.axes = self.view.figure.subplots()
-        
-        self.toolbar = MplToolbar(self.view, self)
-        vlayout = QVBoxLayout()
-        vlayout.addWidget(self.toolbar)
-        vlayout.addWidget(self.view)
-        self.setLayout(vlayout)
-
-        # self.on_change()
-
-    def HistMethodClahe(self):
-        global dicom_image_array
-        global fileName_global
-        """ Update the plot with the current input values """
-        if fileName_global != '':
-            dicom_image_array = select_RoI(dicom_image_array)
-            dicom_image_array = ConvertToUint8(dicom_image_array)
-
-        dicom_image_array = exposure.equalize_adapthist(dicom_image_array, clip_limit=0.03) 
-    
-        self.axes.clear()
-        self.axes.imshow(dicom_image_array, cmap='gray')
-        self.view.draw()
-
-    def SuperPixel(self):
-        global dicom_image_array
-        global fileName_global
-        global segments_global
-        sigma_slic = 1
-        compactness = 0.05
-        numSegments = 2000
-        method = 'gaussian'
-        # apply SLIC and extract (approximately) the supplied number of segments
-        segments_global = slic(dicom_image_array, n_segments=numSegments, sigma=sigma_slic, \
-                        multichannel=False, compactness=compactness, start_label=1)
-        self.axes.clear()
-        self.axes.imshow(mark_boundaries(dicom_image_array, segments_global))
-        self.view.draw()
-
-
-    def on_change(self):
-        global dicom_image_array
-        global fileName_global
-        dicom_image_array = ConvertToUint8(dicom_image_array)
-        """ Update the plot with the current input values """
-        # if fileName_global != '': 
-        #     self.dicom_image = dicom2array(pydicom.dcmread(fileName_global , force = True))
-        self.axes.clear()
-
-        if fileName_global != '':
-            self.axes.imshow(dicom_image_array, cmap='gray')
-            self.view.draw()
-
-    def ResetDicom(self):
-        global dicom_image_array
-        global fileName_global
-        if fileName_global != '':
-            dicom_image_array = dicom2array(pydicom.dcmread(fileName_global, force=True))
-            dicom_image_array = ConvertToUint8(dicom_image_array)
-        self.axes.imshow(dicom_image_array, cmap='gray')
-        self.view.draw()
-    def DeleteObjects(self):
-        global dicom_image_array
-        global fileName_global
-        if fileName_global != '':
-            dicom_image_array = dicom2array(pydicom.dcmread(fileName_global, force=True))
-            dicom_image_array = select_RoI(dicom_image_array)            
-            dicom_image_array = ConvertToUint8(dicom_image_array)
-        self.axes.imshow(dicom_image_array, cmap='gray')
-        self.view.draw()
-
-
-
 
 # Class that shows the tomography with 'remove objects', 'CLAHE' and 
 # superpixels borders
@@ -316,25 +259,6 @@ class PlotWidgetModify(QWidget):
             self.view.draw()
             superpixel_auth = False
     
-    # Apply the superpixel segmentation to the current dicom image array
-    def SuperPixel(self):
-        global dicom_image_array
-        global fileName_global
-        global segments_global
-        global superpixel_auth
-        global numSegments
-        sigma_slic = 1
-        compactness = 0.05
-        method = 'gaussian'
-        # apply SLIC and extract (approximately) the supplied number of segments
-        segments_global = slic(dicom_image_array, n_segments=numSegments, sigma=sigma_slic, \
-                        multichannel=False, compactness=compactness, start_label=1)
-        self.axes.clear()
-        self.axes.imshow(mark_boundaries(dicom_image_array, segments_global))
-        self.view.draw()
-        superpixel_auth = True
-
-
     # Refresh the dicom image array
     def on_change(self):
         self.ChangeSuperpixelAuth()
@@ -483,8 +407,6 @@ class ImageViewer(QMainWindow):
         dicom_image_array =  ConvertToUint8(dicom_image_array)
         # self.plotwidget_original.on_change()
         self.plotwidget_modify.on_change()
-        mask3d = copy.deepcopy(dicom_image_array)
-        masks_empty = False
         imageViewer.plotsuperpixelmask.UpdateView()
         mask3d = []
         masks_empty = True
@@ -537,8 +459,7 @@ class ImageViewer(QMainWindow):
         global dicom_image_array
         # self.plotwidget_original.SuperPixel()
         if not np.array_equal(dicom_image_array, []):
-            self.plotwidget_modify.SuperPixel()
-            self.plotsuperpixelmask.UpdateView()
+            self.plotsuperpixelmask.SuperPixel()
     def OriginalImage(self):
         global fileName_global
         # self.plotwidget_original.ResetDicom()
