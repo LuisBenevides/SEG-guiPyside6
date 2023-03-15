@@ -30,6 +30,7 @@ segmentedMask =[]
 currentTissue = 0
 informacoes = {"colors":[], "identifier":[], "tissue":[]}
 previous_segments = {"superpixel":[], "previous_identifier":[]}
+dictTissues = {"Fat":1, "Bone":2, "Muscle":3}
 # Click event for paint superpixel
 def mouse_event(event):
     global segments_global
@@ -137,23 +138,36 @@ class MplToolbar(NavigationToolbar2QT):
     # Function to save the mask to png
     def save_mask(self):
         global segmentedMask
+        informacoesLista = []
+        for i in range(informacoes["colors"].__len__()):
+            informacoesLista.append([
+                informacoes["colors"][i][0],
+                informacoes["colors"][i][1],
+                informacoes["colors"][i][2],
+                i+1,
+                informacoes["tissue"][i]
+
+            ])
         # Prevent the error throwed by convert a empty array to an array
         if(not np.array_equal(segmentedMask, [])):
                 file_number = 1
 
                 # Converts the mask 3d to an image
                 filename = path.basename(fileName_global).split(".")[0]
+                csvName = ""
                 # Chooses the correct name(according with the existing, adding
                 # +1 to the number identify if this filename already exists)
                 if(path.exists(f'{filename}.csv')):
                     while(path.exists(f'{filename}({str(file_number)}).csv')):
                         file_number +=1
 
-                    np.savetxt(f'{filename}({str(file_number)}).csv', segmentedMask, delimiter=',')
+                    csvName = f'{filename}({str(file_number)}).csv'
                 else:
-
-                    np.savetxt(f'{filename}.csv', segmentedMask, delimiter=',')  
-
+                    csvName = f'{filename}.csv'
+                np.savetxt(csvName, segmentedMask, fmt='%d', delimiter=',')  
+                f = open(csvName, "ab")
+                np.savetxt(f, np.array(informacoesLista), fmt='%d', newline=' ', delimiter=',')
+                f.close()
     # Rollbacks a state of the paint, copying the saved mask to the mask3d
     # deleting the copied and updating the view to the new mask with rollback
     def back_paint(self):
@@ -399,15 +413,21 @@ class ImageViewer(QMainWindow):
         if qcolor.red() != 0 or qcolor.green() != 0 or qcolor.blue() != 0:
             # Put the RGB colors in the 'colorvec' global variable
             selectedColor= np.array([qcolor.red(), qcolor.green(), qcolor.blue()])
-            if(informacoes["colors"].count(selectedColor)>0):
-                currentTissue = informacoes["colors"].index(selectedColor) + 1
+            verif = False
+            index = 0
+            for i in range(informacoes["colors"].__len__()):
+                if(np.array_equal(informacoes["colors"][i], selectedColor)):
+                    verif = True
+                    index = i
+            if(verif):
+                currentTissue = index + 1
                 self.set_color(color)
             else:
                 item, ok = QInputDialog.getItem(self, "Select the region to paint", "List of regions", ("Fat", "Bone", "Muscle"), 0, False)
                 if(ok):
                     self.set_color(color)
-                    if(informacoes["tissue"].count(item)>0):
-                        currentTissue = informacoes["tissue"].index(item) + 1
+                    if(informacoes["tissue"].count(dictTissues[item])>0):
+                        currentTissue = informacoes["tissue"].index(dictTissues[item]) + 1
                         informacoes["colors"][currentTissue-1] = selectedColor
                         if(not np.array_equal(mask3d, [])):
                             masks = np.zeros_like(dicom_image_array, dtype="bool")
@@ -418,13 +438,14 @@ class ImageViewer(QMainWindow):
                             mask3d[:,:,0] = informacoes['colors'][currentTissue -1][0] * masks + mask3d[:,:,0]*(~masks).astype('uint8')
                             mask3d[:,:,1] = informacoes['colors'][currentTissue -1][1] * masks + mask3d[:,:,1]*(~masks).astype('uint8')
                             mask3d[:,:,2] = informacoes['colors'][currentTissue -1][2] * masks + mask3d[:,:,2]*(~masks).astype('uint8')
+                            self.plotsuperpixelmask.UpdateView()
                             
                     else:
                         size = informacoes["colors"].__len__()
                         informacoes["colors"].append(selectedColor)
-                        informacoes["identifier"].append(size)
-                        informacoes["tissue"].append(item)            
-                        currentTissue = size    
+                        informacoes["identifier"].append(size+1)
+                        informacoes["tissue"].append(dictTissues[item])            
+                        currentTissue = size+1  
 
     def set_color(self, color: QColor = Qt.black):
         """ Changes the color icon for the selected """
@@ -448,6 +469,7 @@ class ImageViewer(QMainWindow):
         global masks_empty
         global currentTissue
         global informacoes
+        global dictTissues
         fileName_global = self.pathFile()
         dicom_image_array = dicom2array(pydicom.dcmread(fileName_global, force=True))
         dicom_image_array =  ConvertToUint8(dicom_image_array)
@@ -463,8 +485,9 @@ class ImageViewer(QMainWindow):
             item, ok = QInputDialog.getItem(self, "Select the region to paint", "List of regions", ("Fat", "Bone", "Muscle"), 0, False)
         informacoes["colors"].append(np.array([255, 255, 0]))
         informacoes["identifier"].append(1)
-        informacoes["tissue"].append(item) 
+        informacoes["tissue"].append(dictTissues[item]) 
         currentTissue = 1
+        self.set_color(Qt.yellow)
     def pathFile(self):
         """Get the path of the selected file"""
         fileName_global, _ = QFileDialog.getOpenFileName(self, "Open File",
