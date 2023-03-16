@@ -75,13 +75,10 @@ def paintSuperPixel(x,y,segments):
             previous_paints.__delitem__(0)
             previous_segments["superpixel"].__delitem__(0)
             previous_segments["previous_identifier"].__delitem__(0)
-            
+    segmentedMask[segments==segments[int(y)][int(x)]] = currentTissue        
     # Verify what segments of segments global are equals to 
     # the clicked segment to change this masks elements to 1, 
     # instead of false
-    print(currentTissue)
-    segmentedMask[segments==segments[int(y)][int(x)]] = currentTissue
-    print(segmentedMask)
     masks[segments == segments[int(y)][int(x)]] = 1
     # show the masked region
     ## D_I_A = ((255 * dicom_image_array) * (~masks)).astype('uint8') 
@@ -219,7 +216,10 @@ class PlotSuperPixelMask(QWidget):
             self.axes.clear()
             self.axes.imshow(dicom_image_array, cmap='gray')
             self.view.draw()
-    
+    def showSavedMask(self):
+        self.axes.clear()
+        self.axes.imshow(mask3d)
+        self.view.draw()
     # Self explanatory
     def ClearView(self):
         self.axes.clear()
@@ -460,7 +460,23 @@ class ImageViewer(QMainWindow):
         for c in COLORS:
             b = QPaletteButton(c)
             b.pressed.connect(lambda c=c: self.canvas.set_pen_color(c))
-    
+    def recoveryMask3d(self):
+        global mask3d
+        global informacoes
+        global segmentedMask
+        global masks
+        masks = np.zeros_like(segmentedMask, dtype="bool")
+        
+        mask3d = np.zeros((segmentedMask.shape[0],segmentedMask.shape[1],3), dtype = "uint8")
+        for i in range(informacoes["tissue"].__len__()):
+            masks = np.zeros_like(segmentedMask, dtype="bool")
+            masks[segmentedMask == informacoes["tissue"][i]] = 1
+            mask3d[:,:,0] = informacoes['colors'][i][0] * masks + mask3d[:,:,0]*(~masks).astype('uint8')
+            mask3d[:,:,1] = informacoes['colors'][i][1] * masks + mask3d[:,:,1]*(~masks).astype('uint8')
+            mask3d[:,:,2] = informacoes['colors'][i][2] * masks + mask3d[:,:,2]*(~masks).astype('uint8')
+        self.plotsuperpixelmask.showSavedMask()
+        
+        
     def open(self):
         """Open the interface to choose the file to display in the app"""
         global fileName_global
@@ -470,28 +486,49 @@ class ImageViewer(QMainWindow):
         global currentTissue
         global informacoes
         global dictTissues
+        global segmentedMask
         fileName_global = self.pathFile()
-        dicom_image_array = dicom2array(pydicom.dcmread(fileName_global, force=True))
-        dicom_image_array =  ConvertToUint8(dicom_image_array)
-        # self.plotwidget_original.on_change()
-        self.plotwidget_modify.on_change()
-        imageViewer.plotsuperpixelmask.UpdateView()
-        mask3d = []
-        masks_empty = True
-        currentTissue = 0
-        informacoes = {"colors":[], "identifier":[], "tissue":[]}
-        item, ok = QInputDialog.getItem(self, "Select the region to paint", "List of regions", ("Fat", "Bone", "Muscle"), 0, False)
-        while not ok:
+        if(fileName_global.split(".")[1] == "csv"):
+            file = open(fileName_global)
+            lines = file.readlines()
+            informacoesStr = lines[lines.__len__()-1].split(" ")[:-1]
+            for i in range(informacoesStr.__len__()):
+                informacoesStr[i] = informacoesStr[i].split(",")
+            informacoesInt = np.array(informacoesStr, dtype=int)
+            informacoes = {"colors":[], "identifier":[], "tissue":[]}
+            for i in range(informacoesInt.__len__()):
+                informacoes["colors"].append(np.array([informacoesInt[i][0], informacoesInt[i][1], informacoesInt[i][2]]))
+                informacoes["identifier"].append(informacoesInt[i][3])
+                informacoes["tissue"].append(informacoesInt[i][4])
+            tempMask = []
+            for i in range(lines.__len__()-1):
+                tempMask.append(np.array(lines[i].split(","), dtype=int))
+            segmentedMask = np.array(tempMask, dtype=int)
+            self.recoveryMask3d()
+            file.close()
+        else:
+            dicom_image_array = dicom2array(pydicom.dcmread(fileName_global, force=True))
+            dicom_image_array =  ConvertToUint8(dicom_image_array)
+            # self.plotwidget_original.on_change()
+            self.plotwidget_modify.on_change()
+            imageViewer.plotsuperpixelmask.UpdateView()
+            mask3d = []
+            masks_empty = True
+            currentTissue = 0
+            segmentedMask = []
+            informacoes = {"colors":[], "identifier":[], "tissue":[]}
             item, ok = QInputDialog.getItem(self, "Select the region to paint", "List of regions", ("Fat", "Bone", "Muscle"), 0, False)
-        informacoes["colors"].append(np.array([255, 255, 0]))
-        informacoes["identifier"].append(1)
-        informacoes["tissue"].append(dictTissues[item]) 
-        currentTissue = 1
-        self.set_color(Qt.yellow)
+            while not ok:
+                item, ok = QInputDialog.getItem(self, "Select the region to paint", "List of regions", ("Fat", "Bone", "Muscle"), 0, False)
+            informacoes["colors"].append(np.array([255, 255, 0]))
+            informacoes["identifier"].append(1)
+            informacoes["tissue"].append(dictTissues[item]) 
+            currentTissue = 1
+            self.set_color(Qt.yellow)
     def pathFile(self):
         """Get the path of the selected file"""
         fileName_global, _ = QFileDialog.getOpenFileName(self, "Open File",
-                                                         QDir.currentPath(), filter="DICOM (*.dcm *.)")
+                                                         QDir.currentPath(), filter="DICOM (*.dcm *.);;csv(*.csv)")
         return fileName_global
 
     def view(self, fileName):
