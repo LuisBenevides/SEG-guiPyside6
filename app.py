@@ -531,36 +531,6 @@ class ImageViewer(QMainWindow):
                                                          QDir.currentPath(), filter="DICOM (*.dcm *.);;csv(*.csv)")
         return fileName_global
 
-    def view(self, fileName):
-        image = QImage(fileName)
-        if image.isNull():
-            QMessageBox.information(self, "Image",
-                                    "Cannot load %s." % fileName)
-            return
-        self.imageLabel.setPixmap(QPixmap.fromImage(image))
-        self.scaleFactor = 1.0
-        self.fitToWindowAct.setEnabled(True)
-        self.updateActions()
-        if not self.fitToWindowAct.isChecked():
-            self.imageLabel.adjustSize()
-
-    def zoomIn(self):
-        self.scaleImage(1.25)
-
-    def zoomOut(self):
-        self.scaleImage(0.8)
-
-    def normalSize(self):
-        self.imageLabel.adjustSize()
-        self.scaleFactor = 1.0
-
-    def fitToWindow(self):
-        fitToWindow = self.fitToWindowAct.isChecked()
-        self.scrollArea.setWidgetResizable(fitToWindow)
-        if not fitToWindow:
-            self.normalSize()
-
-        self.updateActions()
 
     #Follow methods are self explanatory
     def HistMethodCLAHE(self):
@@ -620,17 +590,6 @@ class ImageViewer(QMainWindow):
                                      triggered=self.open)
         self.exitAct = QtGui.QAction("E&xit", self, shortcut="Ctrl+Q",
                                      triggered=self.close)
-
-        self.normalSizeAct = QtGui.QAction("&Normal Size", self,
-                                           shortcut="Ctrl+S", enabled=False, triggered=self.normalSize)
-
-        self.fitToWindowAct = QtGui.QAction("&Fit to Window", self,
-                                            enabled=False, checkable=True, shortcut="Ctrl+F",
-                                            triggered=self.fitToWindow)
-
-        # self.HistMethodAct = QtGui.QAction("&HistMethod", self,
-        #                                    enabled=False, checkable=False,
-        #                                    triggered=self.HistMethod)
         self.HistMethodCLAHEAct = QtGui.QAction("&Hist CLAHE", self,
                                                 triggered=self.HistMethodCLAHE)
         self.SuperPixelAct = QtGui.QAction("&SuperPixel", self,
@@ -655,20 +614,13 @@ class ImageViewer(QMainWindow):
         self.fileMenu.addAction(self.exitAct)
 
         self.viewMenu = QMenu("&View", self)
-        # self.viewMenu.addAction(self.zoomInAct)
-        # self.viewMenu.addAction(self.zoomOutAct)
-        self.viewMenu.addAction(self.normalSizeAct)
-        # self.viewMenu.addAction(self.HistMethodAct)
         self.viewMenu.addAction(self.HistMethodCLAHEAct)
         self.viewMenu.addSeparator()
         self.viewMenu.addAction(self.SuperPixelAct)
-        
         self.viewMenu.addAction(self.changeNumSegmentsAct)
         self.viewMenu.addSeparator()
         self.viewMenu.addAction(self.OriginalImageAct)
         self.viewMenu.addAction(self.RemoveObjectsAct)
-        self.viewMenu.addSeparator()
-        self.viewMenu.addAction(self.fitToWindowAct)
 
         self.helpMenu = QMenu("&Help", self)
         self.helpMenu.addAction(self.aboutAct)
@@ -677,24 +629,6 @@ class ImageViewer(QMainWindow):
         self.menuBar().addMenu(self.fileMenu)
         self.menuBar().addMenu(self.viewMenu)
         self.menuBar().addMenu(self.helpMenu)
-
-    def updateActions(self):
-        # self.zoomOutAct.setEnabled(not self.fitToWindowAct.isChecked())
-        # self.zoomInAct.setEnabled(not self.fitToWindowAct.isChecked())
-        self.normalSizeAct.setEnabled(not self.fitToWindowAct.isChecked())
-        self.HistMethodAct.setEnabled(not self.fitToWindowAct.isChecked())
-        self.HistMethodCLAHEAct.setEnabled(not self.fitToWindowAct.isChecked())
-
-    def scaleImage(self, factor):
-        self.scaleFactor *= factor
-        self.imageLabel.resize(self.scaleFactor * self.imageLabel.pixmap().size())
-
-        self.adjustScrollBar(self.scrollArea.horizontalScrollBar(), factor)
-        self.adjustScrollBar(self.scrollArea.verticalScrollBar(), factor)
-    def adjustScrollBar(self, scrollBar, factor):
-        scrollBar.setValue(int(factor * scrollBar.value()
-                               + ((factor - 1) * scrollBar.pageStep() / 2)))
-
 
 if __name__ == '__main__':
     import sys
