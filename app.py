@@ -196,6 +196,7 @@ class PlotSuperPixelMask(QWidget):
         self.toolbar = MplToolbar(self.view, self)
         # Create the event associated with a function on click
         self.view.mpl_connect('button_press_event', mouse_event)
+        self.im = ""
         vlayout = QVBoxLayout()
         vlayout.addWidget(self.toolbar)
         vlayout.addWidget(self.view)
@@ -207,15 +208,25 @@ class PlotSuperPixelMask(QWidget):
         global dicom_image_array
         global segments_global
         if (not masks_empty):
-            # Clear previous views
-            self.axes.clear()
-            # Shows the new view
-            self.axes.imshow(mark_boundaries(mask3d, segments_global))
-            self.view.draw()
+            if(self.im == ""):
+                # Clear previous views
+                self.axes.clear()
+                # Shows the new view
+                self.im = self.axes.imshow(mark_boundaries(mask3d, segments_global))
+                self.view.draw()
+            else:
+                self.im.set_clim([0, 255])
+                self.im.set_data(mark_boundaries(mask3d, segments_global))
+                self.view.draw()
         else:
-            self.axes.clear()
-            self.axes.imshow(dicom_image_array, cmap='gray')
-            self.view.draw()
+            if(self.im == ""):
+                self.axes.clear()
+                self.im = self.axes.imshow(dicom_image_array, cmap='gray')
+                self.view.draw()
+            else:
+                self.im.set_data(dicom_image_array)
+                self.im.set_clim([dicom_image_array.min(), dicom_image_array.max()])
+                self.view.draw()
     def showSavedMask(self):
         self.axes.clear()
         self.axes.imshow(mask3d)
@@ -239,9 +250,9 @@ class PlotSuperPixelMask(QWidget):
                         multichannel=False, compactness=compactness, start_label=1)
         self.axes.clear()
         if(not np.array_equal(mask3d, [])):
-                    self.axes.imshow(mark_boundaries(mask3d, segments_global))
+                self.im = self.axes.imshow(mark_boundaries(mask3d, segments_global))
         else:
-            self.axes.imshow(mark_boundaries(dicom_image_array, segments_global))
+                self.im = self.axes.imshow(mark_boundaries(dicom_image_array, segments_global))
         self.view.draw()
         superpixel_auth = True
 
