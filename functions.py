@@ -15,7 +15,7 @@ from skimage.segmentation import mark_boundaries
 from skimage.measure import label, perimeter, regionprops
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 import matplotlib.backends.backend_qt5 as backend
-
+from PySide6.QtWidgets import *
 def tissue_segmentation(hu_img, tissue):
     """Tissue segmentation
 
@@ -82,3 +82,20 @@ def ConvertToUint8(dicom_image_array):
     target_min)/(orig_max-orig_min))+target_min
     dicom_image_array = dicom_image_array.astype(np.uint8)
     return dicom_image_array
+class CustomDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+
+        QBtn = QDialogButtonBox.Yes | QDialogButtonBox.No
+
+        self.buttonBox = QDialogButtonBox(QBtn)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+
+        self.layout = QVBoxLayout()
+        message = QLabel("Deseja aproveitar a mascara do arquivo .csv atual?")
+        self.layout.addWidget(message)
+        self.layout.addWidget(self.buttonBox)
+        self.setLayout(self.layout)
+    def show(self):
+        return self.exec_()
