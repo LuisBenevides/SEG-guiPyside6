@@ -16,6 +16,7 @@ from skimage.measure import label, perimeter, regionprops
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 import matplotlib.backends.backend_qt5 as backend
 from PySide6.QtWidgets import *
+from PySide6.QtGui import *
 def tissue_segmentation(hu_img, tissue):
     """Tissue segmentation
 
@@ -87,13 +88,13 @@ class CustomDialog(QDialog):
         super().__init__()
 
         QBtn = QDialogButtonBox.Yes | QDialogButtonBox.No
-
         self.buttonBox = QDialogButtonBox(QBtn)
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)
-
+        self.setWindowTitle("-LAMAC-")
+        self.setWindowIcon(QPixmap("./lamac.png"))
         self.layout = QVBoxLayout()
-        message = QLabel("Deseja aproveitar a mascara do arquivo .csv atual?")
+        message = QLabel("<center>Deseja aproveitar a mascara</center> \n<center>do arquivo .csv atual?</center>")
         self.layout.addWidget(message)
         self.layout.addWidget(self.buttonBox)
         self.setLayout(self.layout)
