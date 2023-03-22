@@ -30,7 +30,8 @@ segmentedMask =[]
 currentTissue = 0
 informacoes = {"colors":[], "identifier":[], "tissue":[]}
 previous_segments = {"superpixel":[], "previous_identifier":[]}
-dictTissues = {"Fat":1, "Bone":2, "Muscle":3}
+dictTissues = {"Fat":1,"Intramuscular Fat":2, "Visceral Fat":3, "Bone":4, "Muscle":5, "Organ":6, "Other": 7}
+currentPlot = 0
 # Click event for paint superpixel
 def mouse_event(event):
     global segments_global
@@ -38,10 +39,18 @@ def mouse_event(event):
     if ((event.xdata != None or event.ydata != None) 
     and ((event.xdata > 1 and event.ydata >1)) 
     and (superpixel_auth == True) 
-    and (str(imageViewer.plotsuperpixelmask.toolbar._actions["zoom"]).__contains__("checked=false"))
-    and (str(imageViewer.plotwidget_modify.toolbar._actions["zoom"]).__contains__("checked=false"))
-    and (str(imageViewer.plotsuperpixelmask.toolbar._actions["pan"]).__contains__("checked=false"))
-    and (str(imageViewer.plotwidget_modify.toolbar._actions["pan"]).__contains__("checked=false"))
+    and 
+        (
+        (str(imageViewer.plotsuperpixelmask.toolbar._actions["zoom"]).__contains__("checked=false"))
+        and (str(imageViewer.plotwidget_modify.toolbar._actions["zoom"]).__contains__("checked=false"))
+        and currentPlot == 0
+        )
+    or 
+        (
+        (str(imageViewer.plotsuperpixelmask.toolbar._actions["pan"]).__contains__("checked=false"))
+        and (str(imageViewer.plotwidget_modify.toolbar._actions["pan"]).__contains__("checked=false"))
+        and currentPlot == 1
+        )
     ): 
         paintSuperPixel(event.xdata,event.ydata,segments_global)
 
@@ -195,13 +204,17 @@ class PlotSuperPixelMask(QWidget):
         # Includes the toolbar
         self.toolbar = MplToolbar(self.view, self)
         # Create the event associated with a function on click
-        self.view.mpl_connect('button_press_event', mouse_event)
+        self.view.mpl_connect('button_press_event', self.callMouseEvent)
         self.im = ""
         vlayout = QVBoxLayout()
         vlayout.addWidget(self.toolbar)
         vlayout.addWidget(self.view)
         self.setLayout(vlayout) 
     # Update the view, displaying the mask3d(if modified, shows the new mask)
+    def callMouseEvent(self, event):
+        global currentPlot
+        currentPlot = 0
+        mouse_event(event)
     def UpdateView(self):
         global mask3d
         global masks_empty
@@ -274,14 +287,17 @@ class PlotWidgetModify(QWidget):
         self.view = FigureCanvas(Figure(figsize=(5, 3)))
         self.axes = self.view.figure.subplots()
         self.toolbar = MplToolbar(self.view, self)
-        self.view.mpl_connect('button_press_event', mouse_event)
+        self.view.mpl_connect('button_press_event', self.callMouseEvent)
         vlayout = QVBoxLayout()
         vlayout.addWidget(self.toolbar)
         vlayout.addWidget(self.view)
         self.setLayout(vlayout)
 
         # self.on_change()
-
+    def callMouseEvent(self, event):
+        global currentPlot
+        currentPlot = 1
+        mouse_event(event)
     # Self explanatory
     def ChangeSuperpixelAuth(self):
         global superpixel_auth
@@ -434,7 +450,7 @@ class ImageViewer(QMainWindow):
                 currentTissue = index + 1
                 self.set_color(color)
             else:
-                item, ok = QInputDialog.getItem(self, "Select the region to paint", "List of regions", ("Fat", "Bone", "Muscle"), 0, False)
+                item, ok = QInputDialog.getItem(self, "Select the region to paint", "List of regions", ("Fat","Intramuscular Fat", "Visceral Fat", "Bone", "Muscle", "Organ", "Other"), 0, False)
                 if(ok):
                     self.set_color(color)
                     if(informacoes["tissue"].count(dictTissues[item])>0):
@@ -528,9 +544,9 @@ class ImageViewer(QMainWindow):
             currentTissue = 0
             segmentedMask = []
             informacoes = {"colors":[], "identifier":[], "tissue":[]}
-            item, ok = QInputDialog.getItem(self, "Select the region to paint", "List of regions", ("Fat", "Bone", "Muscle"), 0, False)
+            item, ok = QInputDialog.getItem(self, "Select the region to paint", "List of regions", ("Fat","Intramuscular Fat", "Visceral Fat", "Bone", "Muscle", "Organ", "Other"), 0, False)
             while not ok:
-                item, ok = QInputDialog.getItem(self, "Select the region to paint", "List of regions", ("Fat", "Bone", "Muscle"), 0, False)
+                item, ok = QInputDialog.getItem(self, "Select the region to paint", "List of regions", ("Fat","Intramuscular Fat", "Visceral Fat", "Bone", "Muscle", "Organ", "Other"), 0, False)
             informacoes["colors"].append(np.array([255, 255, 0]))
             informacoes["identifier"].append(1)
             informacoes["tissue"].append(dictTissues[item]) 
