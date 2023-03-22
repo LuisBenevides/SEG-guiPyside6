@@ -42,12 +42,12 @@ def mouse_event(event):
     and 
         (
         (str(imageViewer.plotsuperpixelmask.toolbar._actions["zoom"]).__contains__("checked=false"))
-        and (str(imageViewer.plotwidget_modify.toolbar._actions["zoom"]).__contains__("checked=false"))
+        and (str(imageViewer.plotsuperpixelmask.toolbar._actions["pan"]).__contains__("checked=false"))
         and currentPlot == 0
         )
     or 
         (
-        (str(imageViewer.plotsuperpixelmask.toolbar._actions["pan"]).__contains__("checked=false"))
+        (str(imageViewer.plotwidget_modify.toolbar._actions["zoom"]).__contains__("checked=false"))
         and (str(imageViewer.plotwidget_modify.toolbar._actions["pan"]).__contains__("checked=false"))
         and currentPlot == 1
         )
