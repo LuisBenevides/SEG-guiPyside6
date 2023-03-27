@@ -205,6 +205,7 @@ class PlotSuperPixelMask(QWidget):
         super().__init__()
         self.view = FigureCanvas(Figure(figsize=(5, 3)))
         self.axes = self.view.figure.subplots()
+        self.axes.set_title("Máscara/SuperPixel")
         # Includes the toolbar
         self.toolbar = MplToolbar(self.view, self)
         # Create the event associated with a function on click
@@ -290,6 +291,7 @@ class PlotWidgetModify(QWidget):
         self.segments =[]
         self.view = FigureCanvas(Figure(figsize=(5, 3)))
         self.axes = self.view.figure.subplots()
+        self.axes.set_title("Imagem Conferência")
         self.toolbar = MplToolbar(self.view, self)
         self.view.mpl_connect('button_press_event', self.callMouseEvent)
         vlayout = QVBoxLayout()
@@ -664,13 +666,13 @@ class ImageViewer(QMainWindow):
                                      triggered=self.open)
         self.exitAct = QtGui.QAction("E&xit", self, shortcut="Ctrl+Q",
                                      triggered=self.close)
-        self.HistMethodCLAHEAct = QtGui.QAction("&Hist CLAHE", self,
+        self.HistMethodCLAHEAct = QtGui.QAction("&Hist CLAHE", self, shortcut="Ctrl+C",
                                                 triggered=self.HistMethodCLAHE)
-        self.SuperPixelAct = QtGui.QAction("&SuperPixel", self,
+        self.SuperPixelAct = QtGui.QAction("&SuperPixel", self,  shortcut="Ctrl+Shift+S",
                                            triggered=self.SuperPixel)
         self.OriginalImageAct = QtGui.QAction("&Original Image", self,
                                               triggered=self.OriginalImage)
-        self.RemoveObjectsAct = QtGui.QAction("&Remove Objects", self,
+        self.RemoveObjectsAct = QtGui.QAction("&Remove Objects", self,  shortcut="Ctrl+R",
                                               triggered=self.RemoveObjects)
         
         self.aboutAct = QtGui.QAction("&About", self, triggered=self.about)
@@ -679,23 +681,25 @@ class ImageViewer(QMainWindow):
                                         triggered=qApp.aboutQt)
         self.changeNumSegmentsAct = QtGui.QAction("&Change amount of superpixels", self, shortcut="Ctrl+1",
                                      triggered=self.changeNumSegments)
-
+        self.saveAct = QtGui.QAction("&Save", self, shortcut="Ctrl+S",
+                                     triggered=self.plotsuperpixelmask.toolbar.save_mask)
+        self.backPaintAct = QtGui.QAction("&Back", self, shortcut="Ctrl+Z",
+                                     triggered=self.plotsuperpixelmask.toolbar.back_paint)
     def createMenus(self):
         """Put the created actions in a menu"""
         self.fileMenu = QMenu("&File", self)
         self.fileMenu.addAction(self.openAct)
-        self.fileMenu.addSeparator()
+        self.fileMenu.addAction(self.saveAct)
         self.fileMenu.addAction(self.exitAct)
 
         self.viewMenu = QMenu("&View", self)
+        self.subMenuSuperPixel = self.viewMenu.addMenu("&SuperPixel")
+        self.subMenuSuperPixel.addAction(self.SuperPixelAct)
+        self.subMenuSuperPixel.addAction(self.changeNumSegmentsAct)
         self.viewMenu.addAction(self.HistMethodCLAHEAct)
-        self.viewMenu.addSeparator()
-        self.viewMenu.addAction(self.SuperPixelAct)
-        self.viewMenu.addAction(self.changeNumSegmentsAct)
-        self.viewMenu.addSeparator()
         self.viewMenu.addAction(self.OriginalImageAct)
         self.viewMenu.addAction(self.RemoveObjectsAct)
-
+        self.viewMenu.addAction(self.backPaintAct)
         self.helpMenu = QMenu("&Help", self)
         self.helpMenu.addAction(self.aboutAct)
         self.helpMenu.addAction(self.aboutQtAct)
