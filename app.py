@@ -364,7 +364,8 @@ class PlotWidgetModify(QWidget):
         if fileName_global != '':
             dicom_image_array = dicom2array(pydicom.dcmread(fileName_global, force=True))
             # The function that makes the method
-            dicom_image_array = select_RoI(dicom_image_array)            
+            dicom_image_array = select_RoI(dicom_image_array)
+            dicom_image_array = removeSkin(dicom_image_array)            
             dicom_image_array = ConvertToUint8(dicom_image_array)
 
         self.axes.imshow(dicom_image_array, cmap='gray')

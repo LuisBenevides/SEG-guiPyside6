@@ -13,10 +13,63 @@ from PIL import ImageFile
 from skimage.segmentation import slic
 from skimage.segmentation import mark_boundaries
 from skimage.measure import label, perimeter, regionprops
+from skimage.morphology import disk
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 import matplotlib.backends.backend_qt5 as backend
 from PySide6.QtWidgets import *
 from PySide6.QtGui import *
+import scipy.ndimage as ndi
+
+
+def find_extreme_points(img, thresh=None):
+    """Find the left, right, top, and bottom
+    extreme points of a binary image.
+    Optional threshold to convert gray image
+    to binary image.
+    """
+    binary_img = np.copy(img)
+    if thresh is not None:
+        float(thresh)
+        binary_img[ img <  thresh ] = 0
+        binary_img[ img >= thresh ] = 1
+   
+    min_row, min_col, max_row, max_col = regionprops(binary_img.astype(int))[0].bbox
+   
+    # format is [row, col], NOT [x, y]
+    leftmost   = np.array( [np.argmax(binary_img[:,min_col]),   min_col] )
+    rightmost  = np.array( [np.argmax(binary_img[:,max_col-1]), max_col-1] )
+    topmost    = np.array( [min_row,   np.argmax(binary_img[min_row,:])] )
+    bottommost = np.array( [max_row-1, np.argmax(binary_img[max_row-1,:])] )
+
+    return leftmost, rightmost, topmost, bottommost
+
+# Composed muscle mask: skeletal muscle used instead of muscle,
+# except for a narrow strip on the top.
+def compose_muscle_mask(muscle, skmuscle, tol=10):
+    min_row, min_col, max_row, max_col = regionprops(skmuscle.astype(int))[0].bbox
+    find_extreme_points(skmuscle, thresh=None)
+    min_col = int(min_col)
+    max_col = int(max_col)
+    min_row = int(min_row)
+    output = np.copy(skmuscle)
+    output[min_row-tol:min_row+tol,min_col:max_col] = muscle[min_row-tol:min_row+tol,min_col:max_col]
+    return output
+
+def remove_small_CCs(mask, thres=100, connectivity=1):
+    labels, num_labels = label(mask, background=0, \
+                               return_num=True, connectivity=connectivity)
+    output = np.zeros_like(labels)
+    for lst in np.where( np.bincount(labels.flat)[1:] > thres ):
+        for k in lst:
+            output[ labels==(k+1) ] = 1
+    return output
+
+def normalize(image):
+    return (image - np.min(image)) / (np.max(image) - np.min(image))
+
+def bitwise_minus(img1, img2):
+    """Set subtraction applied to the images."""
+    return np.bitwise_and( img1, 1 - img2 )
 def tissue_segmentation(hu_img, tissue):
     """Tissue segmentation
 
@@ -40,7 +93,79 @@ def select_RoI(hu_img):
     output = np.copy(hu_img)
     output[mask==0] = np.min(hu_img)
     return output
+def removeSkin(hu_img):
+    rows, cols = hu_img.shape
 
+    # Segmentation using HU standard values without skin
+    bone_mask       = tissue_segmentation(hu_img, 'bone')
+    bonelike_mask   = tissue_segmentation(hu_img, 'bonelike')
+    muscle_mask     = tissue_segmentation(hu_img, 'muscle')
+    # musclelike_mask = tissue_segmentation(hu_img, 'musclelike')
+    skmuscle_mask   = tissue_segmentation(hu_img, 'skmuscle')
+    fat_mask        = tissue_segmentation(hu_img, 'fat')
+    fatlike_mask    = tissue_segmentation(hu_img, 'fatlike')
+    air_mask        = tissue_segmentation(hu_img, 'air')
+
+    # Use skeletal muscle mask, except for a narrow strip on the top
+    original_muscle_mask = np.copy(muscle_mask)
+    muscle_mask = compose_muscle_mask(muscle_mask, skmuscle_mask, tol=10)
+
+    # Calculate body_mask, its EDT, and its perimeter
+    body_with_skin_mask = np.ones_like(muscle_mask, dtype=int)
+    body_with_skin_mask[air_mask!=0] = 0
+    body_with_skin_mask = ndi.binary_fill_holes(body_with_skin_mask)
+    body_edt = ndi.distance_transform_edt(body_with_skin_mask)
+    body_perimeter = perimeter(body_with_skin_mask)
+    # Calculate body with skin centroid
+    row_c, col_c = ndi.center_of_mass(body_with_skin_mask)
+    row_c = int( np.round(row_c) )
+    col_c = int( np.round(col_c) )
+
+    # Use body_with_skin_mask information above to
+    # remove skin from muscle_mask and from fat_mask
+    cumulative_sum = 0
+    thick = 1
+    while cumulative_sum < body_perimeter:
+        cumulative_sum += np.sum(fat_mask[body_edt==thick])
+        thick += 1
+    # off_skin is the region inside the skin
+    off_skin = np.ones_like(muscle_mask, dtype=int)
+    off_skin[body_edt <= thick] = 0
+
+    # First estimate for muscle_mask (skin removed)
+    muscle_mask = np.bitwise_and(muscle_mask, off_skin)
+
+    # Threshold used to remove small objects from body_mask,
+    # based on the average of few examples: factor = 0.0025 or 0.0030
+    thres = int( np.round( 0.0030 * np.sum(body_with_skin_mask) ) )
+    print('Small objects threshold:', thres)
+
+    # Remove temporarily small objects from muscle mask
+    aux_muscle_mask = remove_small_CCs(muscle_mask, thres=thres)
+
+    # Calculate body mask
+    body_mask = np.bitwise_or(fat_mask, aux_muscle_mask)
+    body_mask = ndi.binary_opening( ndi.binary_fill_holes(body_mask), \
+                                iterations=3, structure=disk(1) )
+    body_mask = remove_small_CCs(body_mask, thres=thres)
+
+    # Calculate skin_mask, adding 1-pixel thick external line
+    skin_mask = bitwise_minus(body_with_skin_mask, body_mask)
+    skin_mask[body_edt==1] = 1
+    skin_mask = np.bitwise_and(skin_mask, 1 - off_skin)
+    skin_mask = ndi.binary_closing(skin_mask, iterations=3, structure=disk(1))
+
+    # body mask and body EDT map
+    body_mask = bitwise_minus(body_mask, skin_mask)
+    body_edt = normalize( ndi.distance_transform_edt(body_mask) )
+
+    # First estimate for fat_mask (skin removed)
+    total_fat_mask = bitwise_minus(fat_mask, skin_mask) # remove skin from fat_mask
+    fat_mask = remove_small_CCs(total_fat_mask, thres=thres)
+
+    # Second estimate for muscle_mask
+    muscle_mask = muscle_mask * ndi.binary_fill_holes( np.bitwise_or(fat_mask, aux_muscle_mask) )
+    return fat_mask
 # Colors
 colors = {
     'black':  [(0,0,0),       0],
