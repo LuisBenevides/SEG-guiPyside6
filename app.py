@@ -504,7 +504,7 @@ class ImageViewer(QMainWindow):
         mask3d = np.zeros((segmentedMask.shape[0],segmentedMask.shape[1],3), dtype = "uint8")
         for i in range(informacoes["tissue"].__len__()):
             masks = np.zeros_like(segmentedMask, dtype="bool")
-            masks[segmentedMask == informacoes["tissue"][i]] = 1
+            masks[segmentedMask == informacoes["identifier"][i]] = 1
             mask3d[:,:,0] = informacoes['colors'][i][0] * masks + mask3d[:,:,0]*(~masks).astype('uint8')
             mask3d[:,:,1] = informacoes['colors'][i][1] * masks + mask3d[:,:,1]*(~masks).astype('uint8')
             mask3d[:,:,2] = informacoes['colors'][i][2] * masks + mask3d[:,:,2]*(~masks).astype('uint8')
