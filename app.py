@@ -431,7 +431,7 @@ class ImageViewer(QMainWindow):
         # Create the size of the layout
         self.setGeometry(250, 100, 1000, 600)
         self.setWindowTitle("LAMAC")
-        self.setWindowIcon(QPixmap("./lamac.png"))
+        self.setWindowIcon(QPixmap("./icon.png"))
 
     @Slot()
     def on_color_clicked(self, layout):
