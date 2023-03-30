@@ -26,6 +26,9 @@ colorvec = np.array([255, 255, 0])
 masks_empty = True
 # Aproximated number of superpixels segments
 numSegments = 2000
+clip_limit = 0.03
+sigma_slic = 1
+compactness = 0.05
 segmentedMask =[]
 currentTissue = 0
 informacoes = {"colors":[], "identifier":[], "tissue":[]}
@@ -126,7 +129,61 @@ COLORS = [
     '#6b6a7c',
     '#232328'
 ]
-
+class Form(QDialog):
+    def __init__(self, parent=None):
+        super(Form, self).__init__(parent)
+        global numSegments
+        global sigma_slic
+        global compactness
+        global clip_limit
+        self.label1 = QLabel("Superpixels")
+        self.input1 = QLineEdit(str(numSegments))
+        self.input1.setValidator(QIntValidator(1000, 10000))
+        self.label2 = QLabel("Clip limit") 
+        self.input2 = QDoubleSpinBox()
+        self.input2.setValue(clip_limit)
+        self.input2.setMaximum(10)
+        self.label3 = QLabel("sigma")
+        self.input3 = QLineEdit(str(sigma_slic))
+        self.input3.setValidator(QIntValidator(0, 10))
+        self.label4 = QLabel("Compactness")
+        self.input4 = QDoubleSpinBox()
+        self.input4.setValue(compactness)
+        self.input4.setMaximum(10)
+        self.button = QPushButton("Ok")
+        QBtn = QDialogButtonBox.Yes | QDialogButtonBox.No
+        self.buttonBox = QDialogButtonBox(QBtn)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+        layout1 = QHBoxLayout()
+        layout1.addWidget(self.label1)
+        layout1.addWidget(self.input1)
+        layout2 = QHBoxLayout()
+        layout2.addWidget(self.label2)
+        layout2.addWidget(self.input2)
+        layout3 = QHBoxLayout()
+        layout3.addWidget(self.label3)
+        layout3.addWidget(self.input3)
+        layout4 = QHBoxLayout()
+        layout4.addWidget(self.label4)
+        layout4.addWidget(self.input4)
+        layout = QVBoxLayout()
+        layout.addLayout(layout1)
+        layout.addLayout(layout2)
+        layout.addLayout(layout3)
+        layout.addLayout(layout4)
+        layout.addWidget(self.buttonBox)
+        self.setLayout(layout)
+    def accept(self):
+        global numSegments
+        global sigma_slic
+        global compactness
+        global clip_limit
+        numSegments = int(self.input1.text())
+        clip_limit = float(self.input2.text().replace(",", "."))
+        sigma_slic = int(self.input3.text())
+        compactness = float(self.input4.text().replace(",", "."))
+        self.close()
 # Class of the toolbar of the ploted image
 class MplToolbar(NavigationToolbar2QT):
     def __init__(self, canvas_, parent_):
@@ -260,9 +317,8 @@ class PlotSuperPixelMask(QWidget):
         global superpixel_auth
         global numSegments
         global mask3d
-        sigma_slic = 1
-        compactness = 0.05
-        method = 'gaussian'
+        global sigma_slic
+        global compactness
         # apply SLIC and extract (approximately) the supplied number of segments
         segments_global = slic(dicom_image_array, n_segments=numSegments, sigma=sigma_slic, \
                         multichannel=False, compactness=compactness, start_label=1)
@@ -317,7 +373,8 @@ class PlotWidgetModify(QWidget):
         # Just executes the method if exists an opened image
         if fileName_global != '':
             # Method that makes the CLAHE
-            dicom_image_array = exposure.equalize_adapthist(dicom_image_array, clip_limit=0.03) 
+            global clip_limit
+            dicom_image_array = exposure.equalize_adapthist(dicom_image_array, clip_limit=clip_limit) 
             self.axes.clear()
             self.axes.imshow(dicom_image_array, cmap='gray')
             self.view.draw()
@@ -640,12 +697,9 @@ class ImageViewer(QMainWindow):
     def the_button_was_clicked(self):
         self.SuperPixel()
 
-    def changeNumSegments(self):
-        global numSegments
-        superpixelsNumber, ok = QInputDialog.getInt(self, "Número de SuperPixels",
-                                "SuperPixels", QLineEdit.Normal)
-        if(ok):
-            numSegments = superpixelsNumber
+    def changeOptions(self):
+        form = Form()
+        form.exec()
     def resetMask3d(self):
         global mask3d
         global previous_paints
@@ -679,12 +733,12 @@ class ImageViewer(QMainWindow):
 
         self.aboutQtAct = QtGui.QAction("About &Qt", self,
                                         triggered=qApp.aboutQt)
-        self.changeNumSegmentsAct = QtGui.QAction("&Change amount of superpixels", self, shortcut="Ctrl+1",
-                                     triggered=self.changeNumSegments)
         self.saveAct = QtGui.QAction("&Save", self, shortcut="Ctrl+S",
                                      triggered=self.plotsuperpixelmask.toolbar.save_mask)
         self.backPaintAct = QtGui.QAction("&Back", self, shortcut="Ctrl+Z",
                                      triggered=self.plotsuperpixelmask.toolbar.back_paint)
+        self.changeOptionsAct = QtGui.QAction("&Change Options", self,
+                                     triggered=self.changeOptions)
     def createMenus(self):
         """Put the created actions in a menu"""
         self.fileMenu = QMenu("&File", self)
@@ -693,19 +747,20 @@ class ImageViewer(QMainWindow):
         self.fileMenu.addAction(self.exitAct)
 
         self.viewMenu = QMenu("&View", self)
-        self.subMenuSuperPixel = self.viewMenu.addMenu("&SuperPixel")
-        self.subMenuSuperPixel.addAction(self.SuperPixelAct)
-        self.subMenuSuperPixel.addAction(self.changeNumSegmentsAct)
+        self.viewMenu.addAction(self.SuperPixelAct)
         self.viewMenu.addAction(self.HistMethodCLAHEAct)
         self.viewMenu.addAction(self.OriginalImageAct)
         self.viewMenu.addAction(self.RemoveObjectsAct)
         self.viewMenu.addAction(self.backPaintAct)
+        self.optionsMenu = QMenu("&Options", self)
+        self.optionsMenu.addAction(self.changeOptionsAct)
         self.helpMenu = QMenu("&Help", self)
         self.helpMenu.addAction(self.aboutAct)
         self.helpMenu.addAction(self.aboutQtAct)
 
         self.menuBar().addMenu(self.fileMenu)
         self.menuBar().addMenu(self.viewMenu)
+        self.menuBar().addMenu(self.optionsMenu)
         self.menuBar().addMenu(self.helpMenu)
 
 if __name__ == '__main__':
