@@ -4,6 +4,10 @@ from PySide6.QtGui import *
 from PySide6.QtCore import *
 import cv2 as cv2
 from matplotlib import pyplot as plt
+import skimage.filters.edges
+import pydicom.encoders.gdcm
+import pydicom.encoders.pylibjpeg
+import pydicom.pixel_data_handlers.pylibjpeg_handler
 from skimage.segmentation import mark_boundaries
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvas
@@ -136,10 +140,11 @@ class Form(QDialog):
         global sigma_slic
         global compactness
         global clip_limit
+        self.setWindowTitle("Parâmetros")
         self.label1 = QLabel("Superpixels")
         self.input1 = QLineEdit(str(numSegments))
         self.input1.setValidator(QIntValidator(1000, 10000))
-        self.label2 = QLabel("Clip limit") 
+        self.label2 = QLabel("Clip limit(CLAHE)") 
         self.input2 = QDoubleSpinBox()
         self.input2.setValue(clip_limit)
         self.input2.setMaximum(10)
@@ -581,6 +586,10 @@ class ImageViewer(QMainWindow):
         global csvFlag
         global segments_global
         global superpixel_auth
+        global previous_paints
+        global previous_segments
+        previous_segments = {"superpixel":[], "previous_identifier":[]}
+        previous_paints = []
         superpixel_auth = False
         fileName_global = self.pathFile()
         if(fileName_global):
