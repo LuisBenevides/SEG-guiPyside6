@@ -15,7 +15,8 @@ from functions import *
 import copy
 from PIL import Image
 from os import path
-
+from scipy.ndimage import binary_fill_holes
+graph = ""
 # The superpixel mask is here
 segments_global = []
 # The Painted(rgb) mask is here
@@ -133,6 +134,39 @@ COLORS = [
     '#6b6a7c',
     '#232328'
 ]
+class PercentagesGraph(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.view = FigureCanvas(Figure(figsize=(5, 3)))
+        self.axes = self.view.figure.subplots()
+        self.axes.set_title("Porcentagens")
+        vlayout = QVBoxLayout()
+        vlayout.addWidget(self.view)
+        self.setLayout(vlayout) 
+    def calculatePercentages(self):
+        global segmentedMask
+        global mask3d
+        global informacoes
+        global dictTissues
+        if(not (np.array_equal(mask3d, []) 
+        or np.array_equal(segmentedMask, []))):
+            totalpixels = np.count_nonzero((binary_fill_holes(segmentedMask)))
+            labels = []
+            sizes = []
+            listKeys = list(dictTissues.keys())
+            listValues = list(dictTissues.values())
+            for i in range(informacoes["tissue"].__len__()):
+                tissue = informacoes["tissue"][i]
+                identifier = informacoes["identifier"][i]
+                labels.append(listKeys[listValues.index(tissue)])
+                pixels = np.count_nonzero(segmentedMask == identifier)
+                totalpixels = totalpixels - pixels
+                sizes.append(pixels)
+            sizes.append(totalpixels)
+            labels.append("Others")
+            self.axes.pie(sizes, labels=labels, autopct='%1.1f%%',
+            shadow=True, startangle=90)
+            self.axes.axis('equal')
 class Form(QDialog):
     def __init__(self, parent=None):
         super(Form, self).__init__(parent)
@@ -722,7 +756,11 @@ class ImageViewer(QMainWindow):
             masks_empty = False
             previous_paints.append(copy.deepcopy(mask3d))
             imageViewer.plotsuperpixelmask.UpdateView()
-        
+    def calculatePercentages(self):
+        global graph
+        graph = PercentagesGraph()
+        graph.calculatePercentages()
+        graph.show()
     def createActions(self):
         """Create the actions to put in menu options"""
         self.openAct = QtGui.QAction("&Open...", self, shortcut="Ctrl+O",
@@ -748,6 +786,8 @@ class ImageViewer(QMainWindow):
                                      triggered=self.plotsuperpixelmask.toolbar.back_paint)
         self.changeOptionsAct = QtGui.QAction("&Change Options", self,
                                      triggered=self.changeOptions)
+        self.calculatePercentagesAct = QtGui.QAction("&Calculate Percentages", self,
+                                     triggered=self.calculatePercentages)
     def createMenus(self):
         """Put the created actions in a menu"""
         self.fileMenu = QMenu("&File", self)
@@ -761,6 +801,7 @@ class ImageViewer(QMainWindow):
         self.viewMenu.addAction(self.OriginalImageAct)
         self.viewMenu.addAction(self.RemoveObjectsAct)
         self.viewMenu.addAction(self.backPaintAct)
+        self.viewMenu.addAction(self.calculatePercentagesAct)
         self.optionsMenu = QMenu("&Options", self)
         self.optionsMenu.addAction(self.changeOptionsAct)
         self.helpMenu = QMenu("&Help", self)
