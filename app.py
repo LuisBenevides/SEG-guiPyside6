@@ -143,7 +143,7 @@ class PercentagesGraph(QWidget):
         super().__init__()
         self.view = FigureCanvas(Figure(figsize=(10, 6)))
         self.axes = self.view.figure.subplots()
-        self.axes.set_title("Porcentagens")
+        self.axes.set_title("Gráfico")
         vlayout = QVBoxLayout()
         vlayout.addWidget(self.view)
         self.setLayout(vlayout) 
@@ -168,8 +168,19 @@ class PercentagesGraph(QWidget):
                 sizes.append(pixels)
             sizes.append(totalpixels)
             labels.append("Unsegmented")
-            self.axes.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=90)
-            self.axes.axis('equal')
+            sizes[:] = [100*x / sum(sizes) for x in sizes]
+            colors = []
+            colors[:] = [[color[0]/255, color[1]/255, color[2]/255] for color in informacoes["colors"]]
+            xlables = []
+            xlables[:] = [f"{labels[i]}\n{np.round(sizes[i], 2)}%" for i in range(sizes.__len__())]
+            x = np.arange(len(sizes))
+            self.axes.bar(x, sizes, color=colors, linewidth=0.2, edgecolor=[0,0,0])
+            self.axes.set_xticks(x)
+            self.axes.set_xticklabels(labels)
+            self.axes.set_xticklabels(xlables)
+            self.axes.set_xlabel('Tissues')
+            self.axes.set_ylabel('Percentages')
+            self.view.draw()
 class Form(QDialog):
     def __init__(self, parent=None):
         super(Form, self).__init__(parent)
