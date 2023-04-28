@@ -3,3 +3,5 @@ images
 *dist
 *build
 *.spec
+defaultImageDir.txt
+defaultMaskDir.txt

@@ -16,6 +16,8 @@ import copy
 from PIL import Image
 from os import path
 from scipy.ndimage import binary_fill_holes
+saveDir = ""
+openDir = ""
 graph = ""
 # The superpixel mask is here
 segments_global = []
@@ -83,9 +85,9 @@ def paintSuperPixel(x,y,segments):
     if(masks_empty):
         # Creates a new 3d mask with the shape of the dicom image array
         mask3d = np.zeros((dicom_image_array.shape[0],dicom_image_array.shape[1],3), dtype = "uint8")
-        mask3d[:,:,0] = 255 * dicom_image_array 
-        mask3d[:,:,1] = 255 * dicom_image_array 
-        mask3d[:,:,2] = 255 * dicom_image_array
+        mask3d[:,:,0] = dicom_image_array 
+        mask3d[:,:,1] = dicom_image_array 
+        mask3d[:,:,2] = dicom_image_array
         masks_empty = False
     masks = np.zeros_like(dicom_image_array, dtype="bool")
     # Store a copy of mask3d for rollback
@@ -171,6 +173,7 @@ class PercentagesGraph(QWidget):
             sizes[:] = [100*x / sum(sizes) for x in sizes]
             colors = []
             colors[:] = [[color[0]/255, color[1]/255, color[2]/255] for color in informacoes["colors"]]
+            colors.append([50/255,50/255,50/255])
             xlables = []
             xlables[:] = [f"{labels[i]}\n{np.round(sizes[i], 2)}%" for i in range(sizes.__len__())]
             x = np.arange(len(sizes))
@@ -305,6 +308,7 @@ class MplToolbar(NavigationToolbar2QT):
     # Function to save the mask to png
     def save_mask(self):
         global segmentedMask
+        global saveDir
         informacoesLista = []
         for i in range(informacoes["colors"].__len__()):
             informacoesLista.append([
@@ -317,24 +321,22 @@ class MplToolbar(NavigationToolbar2QT):
             ])
         # Prevent the error throwed by convert a empty array to an array
         if(not np.array_equal(segmentedMask, [])):
-                file_number = 1
-
-                # Converts the mask 3d to an image
-                filename = path.basename(fileName_global).split(".")[0]
-                csvName = ""
-                # Chooses the correct name(according with the existing, adding
-                # +1 to the number identify if this filename already exists)
-                if(path.exists(f'{filename}.csv')):
-                    while(path.exists(f'{filename}({str(file_number)}).csv')):
-                        file_number +=1
-
-                    csvName = f'{filename}({str(file_number)}).csv'
+                a = QDir()
+                if(path.exists("./defaultMaskDir.txt")):
+                    f = open("./defaultMaskDir.txt")
+                    f.close()
+                    a.setPath(saveDir)
                 else:
-                    csvName = f'{filename}.csv'
-                np.savetxt(csvName, segmentedMask, fmt='%d', delimiter=',')  
-                f = open(csvName, "ab")
-                np.savetxt(f, np.array(informacoesLista), fmt='%d', newline=' ', delimiter=',')
-                f.close()
+                    a = QDir.currentPath()
+                    QFileDialog.getSaveFileUrl
+                suggestedName = path.basename(fileName_global)
+                filePath, _ = QFileDialog.getSaveFileName(self, "Save File",
+                                                            f"{a.path()}/{suggestedName}", filter="csv(*.csv)")
+                if(filePath != ""):
+                    np.savetxt(filePath, segmentedMask, fmt='%d', delimiter=',')  
+                    f = open(filePath, "ab")
+                    np.savetxt(f, np.array(informacoesLista), fmt='%d', newline=' ', delimiter=',')
+                    f.close()
     # Rollbacks a state of the paint, copying the saved mask to the mask3d
     # deleting the copied and updating the view to the new mask with rollback
     def back_paint(self):
@@ -432,7 +434,7 @@ class PlotSuperPixelMask(QWidget):
         if(not np.array_equal(mask3d, [])):
                 self.im = self.axes.imshow(mark_boundaries(mask3d, segments_global))
         else:
-                self.im = self.axes.imshow(mark_boundaries(dicom_image_array, segments_global))
+                self.im = self.axes.imshow(mark_boundaries(dicom_image_array/255, segments_global), cmap='gray')
         self.view.draw()
         superpixel_auth = True
 
@@ -481,7 +483,9 @@ class PlotWidgetModify(QWidget):
             # Method that makes the CLAHE
             global clip_limit
             global nbins
-            dicom_image_array = exposure.equalize_adapthist(dicom_image_array, clip_limit=clip_limit, nbins=nbins) 
+            dicom_image_array = (exposure.equalize_adapthist(dicom_image_array/255, clip_limit=clip_limit, nbins=nbins))
+            if(dicom_image_array.max()<=1):
+                dicom_image_array[:,:] = (dicom_image_array[:,:]*255).astype('uint8')
             self.axes.clear()
             self.axes.imshow(dicom_image_array, cmap='gray')
             self.view.draw()
@@ -591,7 +595,7 @@ class ImageViewer(QMainWindow):
         
         self.createActions()
         self.createMenus()
-
+        self.getDirsPath()
         # Create the size of the layout
         self.setGeometry(250, 100, 1000, 600)
         self.setWindowTitle("LAMAC")
@@ -663,9 +667,14 @@ class ImageViewer(QMainWindow):
         global informacoes
         global segmentedMask
         global masks
+        global fileName_global
         masks = np.zeros_like(segmentedMask, dtype="bool")
         
         mask3d = np.zeros((segmentedMask.shape[0],segmentedMask.shape[1],3), dtype = "uint8")
+        if(fileName_global.split(".")[1] == "dcm"):
+            mask3d[:,:,0] = dicom_image_array 
+            mask3d[:,:,1] = dicom_image_array 
+            mask3d[:,:,2] = dicom_image_array
         for i in range(informacoes["tissue"].__len__()):
             masks = np.zeros_like(segmentedMask, dtype="bool")
             masks[segmentedMask == informacoes["identifier"][i]] = 1
@@ -730,9 +739,11 @@ class ImageViewer(QMainWindow):
                     currentTissue = 1
                     self.set_color(QColor(informacoes["colors"][0][0], informacoes["colors"][0][1], informacoes["colors"][0][2]))
                     segments_global = []
+                    self.recoveryMask3d()
                     masks_empty = False
                 else:
                     mask3d = []
+                    self.plotsuperpixelmask.im = ""
                     masks_empty = True
                     currentTissue = 0
                     segmentedMask = []
@@ -751,7 +762,7 @@ class ImageViewer(QMainWindow):
     def pathFile(self):
         """Get the path of the selected file"""
         fileName_global, _ = QFileDialog.getOpenFileName(self, "Open File",
-                                                         QDir.currentPath(), filter="DICOM (*.dcm *.);;csv(*.csv)")
+                                                         openDir, filter="DICOM (*.dcm *.);;csv(*.csv)")
         return fileName_global
 
 
@@ -765,9 +776,13 @@ class ImageViewer(QMainWindow):
                 self.plotsuperpixelmask.im = ""
             self.plotwidget_modify.HistMethodClahe()
             if(np.array_equal(segments_global, []) and not np.array_equal(mask3d, [])):
+                self.recoveryMask3d()
+                self.plotsuperpixelmask.showSavedMask()
+            elif(not np.array_equal(mask3d, [])):
+                self.recoveryMask3d()
                 self.plotsuperpixelmask.showSavedMask()
             else:
-                self.plotsuperpixelmask.UpdateView()
+                self.plotsuperpixelmask.UpdateView()  
     
     def SuperPixel(self):
         global dicom_image_array
@@ -786,8 +801,11 @@ class ImageViewer(QMainWindow):
                     self.plotsuperpixelmask.im = ""
                 if(np.array_equal(segments_global, []) and not np.array_equal(mask3d, [])):
                     self.plotsuperpixelmask.showSavedMask()
+                elif(not np.array_equal(mask3d, [])):
+                    self.recoveryMask3d()
+                    self.plotsuperpixelmask.showSavedMask()
                 else:
-                    self.plotsuperpixelmask.UpdateView()
+                    self.plotsuperpixelmask.UpdateView()  
     def RemoveObjects(self):
         global dicom_image_array
         global segments_global
@@ -798,9 +816,13 @@ class ImageViewer(QMainWindow):
                 self.plotsuperpixelmask.im = ""
             self.plotwidget_modify.DeleteObjects()
             if(np.array_equal(segments_global, []) and not np.array_equal(mask3d, [])):
+                self.recoveryMask3d()
+                self.plotsuperpixelmask.showSavedMask()
+            elif(not np.array_equal(mask3d, [])):
+                self.recoveryMask3d()
                 self.plotsuperpixelmask.showSavedMask()
             else:
-                self.plotsuperpixelmask.UpdateView()    
+                self.plotsuperpixelmask.UpdateView()  
     def about(self):
         QMessageBox.about(self, "LAMAC",
                           "<p>Segmentador Manual !!! </p>")
@@ -818,9 +840,9 @@ class ImageViewer(QMainWindow):
         if(not np.array_equal(dicom_image_array, [])):
             previous_paints = []
             mask3d = np.zeros((dicom_image_array.shape[0],dicom_image_array.shape[1],3), dtype = "uint8")
-            mask3d[:,:,0] = 255 * dicom_image_array 
-            mask3d[:,:,1] = 255 * dicom_image_array 
-            mask3d[:,:,2] = 255 * dicom_image_array
+            mask3d[:,:,0] = dicom_image_array 
+            mask3d[:,:,1] = dicom_image_array 
+            mask3d[:,:,2] = dicom_image_array
             masks_empty = False
             previous_paints.append(copy.deepcopy(mask3d))
             imageViewer.plotsuperpixelmask.UpdateView()
@@ -829,6 +851,30 @@ class ImageViewer(QMainWindow):
         graph = PercentagesGraph()
         graph.calculatePercentages()
         graph.show()
+    def setDefaultOpen(self):
+        global openDir
+        openDir = QFileDialog.getExistingDirectory(self)
+        f = open("./defaultImageDir.txt", "w")
+        f.write(openDir)
+        f.close()
+    def setDefaultSave(self):
+        global saveDir
+        saveDir = QFileDialog.getExistingDirectory(self)
+        f = open("./defaultMaskDir.txt", "w")
+        f.write(saveDir)
+        f.close()
+    def getDirsPath(self):
+        global saveDir
+        global openDir
+        if(path.exists("./defaultImageDir.txt")):
+            f = open("./defaultImageDir.txt")
+            openDir = f.readline()
+            f.close()
+        if(path.exists("./defaultMaskDir.txt")):
+            f = open("./defaultMaskDir.txt")
+            saveDir = f.readline()
+            f.close()
+
     def createActions(self):
         """Create the actions to put in menu options"""
         self.openAct = QtGui.QAction("&Open...", self, shortcut="Ctrl+O",
@@ -856,6 +902,10 @@ class ImageViewer(QMainWindow):
                                      triggered=self.changeOptions)
         self.calculatePercentagesAct = QtGui.QAction("&Calculate Percentages", self,
                                      triggered=self.calculatePercentages)
+        self.setDefaultOpenDirAct = QtGui.QAction("&Default Open Directory", self,
+                                     triggered=self.setDefaultOpen)
+        self.setDefaultSaveDirAct = QtGui.QAction("&Default Save Directory", self,
+                                     triggered=self.setDefaultSave)
     def createMenus(self):
         """Put the created actions in a menu"""
         self.fileMenu = QMenu("&File", self)
@@ -872,6 +922,8 @@ class ImageViewer(QMainWindow):
         self.viewMenu.addAction(self.calculatePercentagesAct)
         self.optionsMenu = QMenu("&Options", self)
         self.optionsMenu.addAction(self.changeOptionsAct)
+        self.optionsMenu.addAction(self.setDefaultOpenDirAct)
+        self.optionsMenu.addAction(self.setDefaultSaveDirAct)
         self.helpMenu = QMenu("&Help", self)
         self.helpMenu.addAction(self.aboutAct)
         self.helpMenu.addAction(self.aboutQtAct)
