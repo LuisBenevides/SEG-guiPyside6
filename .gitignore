@@ -4,7 +4,11 @@ images
 *build
 *.spec
 defaultImageDir.txt
+<<<<<<< HEAD
 defaultMaskDir.txt
 venv/
 __pycache__/
 __pycache__/functions.cpython-310.pyc
+=======
+defaultMaskDir.txt
+>>>>>>> aec10dd (save dir and open dir added and some bugs fixed)

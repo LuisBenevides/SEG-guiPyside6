@@ -20,7 +20,10 @@ import copy
 from PIL import Image
 from os import path
 from scipy.ndimage import binary_fill_holes
+<<<<<<< HEAD
 area = 1
+=======
+>>>>>>> aec10dd (save dir and open dir added and some bugs fixed)
 saveDir = ""
 openDir = ""
 graph = ""
@@ -429,18 +432,27 @@ class MplToolbar(NavigationToolbar2QT):
                     f.close()
                     a.setPath(saveDir)
                 else:
+<<<<<<< HEAD
                     a = QDir.setPath(QDir.currentPath())
                     QFileDialog.getSaveFileUrl
                 suggestedName = path.basename(fileName_global).split(".")[0]
                 suggestedName = suggestedName + ".csv"
+=======
+                    a = QDir.currentPath()
+                    QFileDialog.getSaveFileUrl
+                suggestedName = path.basename(fileName_global)
+>>>>>>> aec10dd (save dir and open dir added and some bugs fixed)
                 filePath, _ = QFileDialog.getSaveFileName(self, "Save File",
                                                             f"{a.path()}/{suggestedName}", filter="csv(*.csv)")
                 if(filePath != ""):
                     np.savetxt(filePath, segmentedMask, fmt='%d', delimiter=',')  
                     f = open(filePath, "ab")
                     np.savetxt(f, np.array(informacoesLista), fmt='%d', newline=' ', delimiter=',')
+<<<<<<< HEAD
                     f.write(b"\n")
                     np.savetxt(f, [np.count_nonzero(ConvertToUint8(select_RoI(dicom2array(pydicom.dcmread(fileName_global, force=True)))))], fmt='%d', delimiter=',')
+=======
+>>>>>>> aec10dd (save dir and open dir added and some bugs fixed)
                     f.close()
     # Rollbacks a state of the paint, copying the saved mask to the mask3d
     # deleting the copied and updating the view to the new mask with rollback
@@ -552,7 +564,11 @@ class PlotSuperPixelMask(QWidget):
         if(not np.array_equal(mask3d, [])):
                 self.im = self.axes.imshow(mark_boundaries(mask3d, segments_global*selected_hu))
         else:
+<<<<<<< HEAD
                 self.im = self.axes.imshow(mark_boundaries(dicom_image_array/255, segments_global*selected_hu), cmap='gray')
+=======
+                self.im = self.axes.imshow(mark_boundaries(dicom_image_array/255, segments_global), cmap='gray')
+>>>>>>> aec10dd (save dir and open dir added and some bugs fixed)
         self.view.draw()
         
         superpixel_auth = True
@@ -936,9 +952,15 @@ class ImageViewer(QMainWindow):
                 csvFlag = False
     def pathFile(self):
         """Get the path of the selected file"""
+<<<<<<< HEAD
         fileName, _ = QFileDialog.getOpenFileName(self, "Open File",
                                                          openDir, filter="DICOM (*.dcm *.);;csv(*.csv)")
         return fileName
+=======
+        fileName_global, _ = QFileDialog.getOpenFileName(self, "Open File",
+                                                         openDir, filter="DICOM (*.dcm *.);;csv(*.csv)")
+        return fileName_global
+>>>>>>> aec10dd (save dir and open dir added and some bugs fixed)
 
 
     #Follow methods are self explanatory
@@ -1016,6 +1038,7 @@ class ImageViewer(QMainWindow):
                 self.plotsuperpixelmask.showSavedMask()
             else:
                 self.plotsuperpixelmask.UpdateView()  
+<<<<<<< HEAD
     def RemoveSkin(self):
             global dicom_image_array
             global segments_global
@@ -1036,6 +1059,8 @@ class ImageViewer(QMainWindow):
                     self.plotsuperpixelmask.showSavedMask()
                 else:
                     self.plotsuperpixelmask.UpdateView()  
+=======
+>>>>>>> aec10dd (save dir and open dir added and some bugs fixed)
     def about(self):
         QMessageBox.about(self, "LAMAC",
                           "<p>Segmentador Manual !!! </p>")
@@ -1066,6 +1091,7 @@ class ImageViewer(QMainWindow):
         graph.show()
     def setDefaultOpen(self):
         global openDir
+<<<<<<< HEAD
         Dir = QFileDialog.getExistingDirectory(self)
         if(Dir != ""):
             openDir = Dir
@@ -1081,6 +1107,18 @@ class ImageViewer(QMainWindow):
             f = open("./defaultMaskDir.txt", "w")
             f.write(saveDir)
             f.close()
+=======
+        openDir = QFileDialog.getExistingDirectory(self)
+        f = open("./defaultImageDir.txt", "w")
+        f.write(openDir)
+        f.close()
+    def setDefaultSave(self):
+        global saveDir
+        saveDir = QFileDialog.getExistingDirectory(self)
+        f = open("./defaultMaskDir.txt", "w")
+        f.write(saveDir)
+        f.close()
+>>>>>>> aec10dd (save dir and open dir added and some bugs fixed)
     def getDirsPath(self):
         global saveDir
         global openDir
@@ -1092,6 +1130,7 @@ class ImageViewer(QMainWindow):
             f = open("./defaultMaskDir.txt")
             saveDir = f.readline()
             f.close()
+<<<<<<< HEAD
     def alternar(self):
         global numSegments
         if(numSegments == 2000):
@@ -1118,6 +1157,8 @@ class ImageViewer(QMainWindow):
         show_superpixel = True
         superpixel_auth = False
         toggle_available = False
+=======
+>>>>>>> aec10dd (save dir and open dir added and some bugs fixed)
 
     def createActions(self):
         """Create the actions to put in menu options"""
@@ -1156,8 +1197,11 @@ class ImageViewer(QMainWindow):
                                      triggered=self.setDefaultOpen)
         self.setDefaultSaveDirAct = QtGui.QAction("&Default Save Directory", self,
                                      triggered=self.setDefaultSave)
+<<<<<<< HEAD
         self.alternarAct = QtGui.QAction("&Alternar", self, shortcut="Ctrl+F",
                                      triggered=self.alternar)
+=======
+>>>>>>> aec10dd (save dir and open dir added and some bugs fixed)
     def createMenus(self):
         """Put the created actions in a menu"""
         self.fileMenu = QMenu("&File", self)
@@ -1179,7 +1223,10 @@ class ImageViewer(QMainWindow):
         self.optionsMenu.addAction(self.changeOptionsAct)
         self.optionsMenu.addAction(self.setDefaultOpenDirAct)
         self.optionsMenu.addAction(self.setDefaultSaveDirAct)
+<<<<<<< HEAD
         self.optionsMenu.addAction(self.alternarAct)
+=======
+>>>>>>> aec10dd (save dir and open dir added and some bugs fixed)
         self.helpMenu = QMenu("&Help", self)
         self.helpMenu.addAction(self.aboutAct)
         self.helpMenu.addAction(self.aboutQtAct)
