@@ -6,6 +6,8 @@ import cv2 as cv2
 from matplotlib import pyplot as plt
 import skimage.filters.edges
 import pydicom.encoders.gdcm
+import gdcm
+from libjpeg import decode_pixel_data
 import pydicom.encoders.pylibjpeg
 import pydicom.pixel_data_handlers.pylibjpeg_handler
 from skimage.segmentation import mark_boundaries
@@ -327,9 +329,10 @@ class MplToolbar(NavigationToolbar2QT):
                     f.close()
                     a.setPath(saveDir)
                 else:
-                    a = QDir.currentPath()
+                    a = QDir.setPath(QDir.currentPath())
                     QFileDialog.getSaveFileUrl
-                suggestedName = path.basename(fileName_global)
+                suggestedName = path.basename(fileName_global).split(".")[0]
+                suggestedName = suggestedName + ".csv"
                 filePath, _ = QFileDialog.getSaveFileName(self, "Save File",
                                                             f"{a.path()}/{suggestedName}", filter="csv(*.csv)")
                 if(filePath != ""):

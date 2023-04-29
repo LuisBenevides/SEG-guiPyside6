@@ -17,6 +17,8 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 import matplotlib.backends.backend_qt5 as backend
 from PySide6.QtWidgets import *
 from PySide6.QtGui import *
+import pylibjpeg
+import libjpeg
 
 
 def tissue_segmentation(hu_img, tissue):
