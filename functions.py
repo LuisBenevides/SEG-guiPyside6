@@ -12,7 +12,7 @@ from PIL import ImageFile
 #ImageFile.LOAD_TRUNCATED_IMAGES = True
 from skimage.segmentation import slic
 from skimage.segmentation import mark_boundaries
-from skimage.measure import label, perimeter
+from skimage.measure import label
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 import matplotlib.backends.backend_qt5 as backend
 from PySide6.QtWidgets import *
@@ -23,20 +23,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.ndimage as ndi
 import pydicom
-from time import time
-from skimage import exposure, color
-from skimage.filters import threshold_otsu, laplace
-from skimage.measure import label, perimeter, regionprops
-from skimage.segmentation import slic, mark_boundaries, watershed
-from skimage.restoration import denoise_tv_chambolle, denoise_bilateral
-from skimage.draw import polygon2mask, ellipse
-from skimage.morphology import disk, convex_hull_image
-from skimage.morphology import remove_small_objects, remove_small_holes
-from skimage.morphology import thin, skeletonize
-from skimage.feature import peak_local_max
-from scipy.signal import savgol_filter
-from scipy.ndimage.measurements import center_of_mass
-from scipy.ndimage import binary_hit_or_miss
+from skimage import exposure
+from skimage.measure import label, regionprops
+from skimage.morphology import disk
 def bitwise_minus(img1, img2):
     """Set subtraction applied to the images."""
     return np.bitwise_and( img1, 1 - img2 )
