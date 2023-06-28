@@ -19,30 +19,89 @@ from PySide6.QtWidgets import *
 from PySide6.QtGui import *
 import pylibjpeg
 import libjpeg
+import numpy as np
+import matplotlib.pyplot as plt
+import scipy.ndimage as ndi
+import pydicom
+from time import time
+from skimage import exposure, color
+from skimage.filters import threshold_otsu, laplace
+from skimage.measure import label, perimeter, regionprops
+from skimage.segmentation import slic, mark_boundaries, watershed
+from skimage.restoration import denoise_tv_chambolle, denoise_bilateral
+from skimage.draw import polygon2mask, ellipse
+from skimage.morphology import disk, convex_hull_image
+from skimage.morphology import remove_small_objects, remove_small_holes
+from skimage.morphology import thin, skeletonize
+from skimage.feature import peak_local_max
+from scipy.signal import savgol_filter
+from scipy.ndimage.measurements import center_of_mass
+from scipy.ndimage import binary_hit_or_miss
+def bitwise_minus(img1, img2):
+    """Set subtraction applied to the images."""
+    return np.bitwise_and( img1, 1 - img2 )
 
+def remove_small_CCs(mask, thres=100, connectivity=1):
+    labels, num_labels = label(mask, background=0, \
+                               return_num=True, connectivity=connectivity)
+    output = np.zeros_like(labels)
+    for lst in np.where( np.bincount(labels.flat)[1:] > thres ):
+        for k in lst:
+            output[ labels==(k+1) ] = 1
+    return output
+def find_extreme_points(img, thresh=None):
+    """Find the left, right, top, and bottom 
+    extreme points of a binary image.
+    Optional threshold to convert gray image 
+    to binary image.
+    """
 
-def tissue_segmentation(hu_img, tissue):
+    binary_img = np.copy(img)
+    if thresh is not None:
+        float(thresh)
+        binary_img[ img <  thresh ] = 0
+        binary_img[ img >= thresh ] = 1
+    
+    min_row, min_col, max_row, max_col = regionprops(binary_img.astype(int))[0].bbox
+    
+    # format is [row, col], NOT [x, y]
+    leftmost   = np.array( [np.argmax(binary_img[:,min_col]),   min_col] )
+    rightmost  = np.array( [np.argmax(binary_img[:,max_col-1]), max_col-1] )
+    topmost    = np.array( [min_row,   np.argmax(binary_img[min_row,:])] )
+    bottommost = np.array( [max_row-1, np.argmax(binary_img[max_row-1,:])] )
+
+    return leftmost, rightmost, topmost, bottommost
+def compose_muscle_mask(muscle, skmuscle, tol=10):
+    min_row, min_col, max_row, max_col = regionprops(skmuscle.astype(int))[0].bbox
+    find_extreme_points(skmuscle, thresh=None)
+    min_col = int(min_col)
+    max_col = int(max_col)
+    min_row = int(min_row)
+    output = np.copy(skmuscle)
+    output[min_row-tol:min_row+tol,min_col:max_col] = muscle[min_row-tol:min_row+tol,min_col:max_col]
+    return output
+def tissue_segmentation(dicom_image_array, tissue):
     """Tissue segmentation
 
     Returns a mask of the image where the tissue was found. The tissue is a strip
     of Hounsfield Units value in the "material"'s dict
     """
-    segm_img = np.zeros_like(hu_img, dtype=np.bool_)
-    segm_img[ (hu_img >= materials[tissue][0][0]) &
-             (hu_img <= materials[tissue][0][1]) ] = 1
+    segm_img = np.zeros_like(dicom_image_array, dtype=np.bool_)
+    segm_img[ (dicom_image_array >= materials[tissue][0][0]) &
+             (dicom_image_array <= materials[tissue][0][1]) ] = 1
     return segm_img
-def select_RoI(hu_img):
+def select_RoI(dicom_image_array):
     """Select Region of Interest
 
     Removes unwanted objects from the image, 
     such as the tomograph "bed" and sheets.
     """
-    mask = np.ones_like(hu_img)
-    mask[hu_img < materials['air'][0][1]] = 0
+    mask = np.ones_like(dicom_image_array)
+    mask[dicom_image_array < materials['air'][0][1]] = 0
     labels = label(mask, background=0, return_num=False, connectivity=1)
     mask = np.array(labels == np.argmax(np.bincount(labels.flat)[1:]) + 1, dtype=int)
-    output = np.copy(hu_img)
-    output[mask==0] = np.min(hu_img)
+    output = np.copy(dicom_image_array)
+    output[mask==0] = np.min(dicom_image_array)
     return output
 # Colors
 colors = {
@@ -103,3 +162,70 @@ class CustomDialog(QDialog):
         self.setLayout(self.layout)
     def show(self):
         return self.exec_()
+def removeSkinAndObjects(dicom_image_array):
+    dicom_image_array = select_RoI(dicom_image_array)
+    rows, cols = dicom_image_array.shape
+    # Segmentation using HU standard values without skin
+    bone_mask       = tissue_segmentation(dicom_image_array, 'bone')
+    bonelike_mask   = tissue_segmentation(dicom_image_array, 'bonelike')
+    muscle_mask     = tissue_segmentation(dicom_image_array, 'muscle')
+    # musclelike_mask = tissue_segmentation(dicom_image_array, 'musclelike')
+    skmuscle_mask   = tissue_segmentation(dicom_image_array, 'skmuscle')
+    fat_mask        = tissue_segmentation(dicom_image_array, 'fat')
+    fatlike_mask    = tissue_segmentation(dicom_image_array, 'fatlike')
+    air_mask        = tissue_segmentation(dicom_image_array, 'air')
+
+    # Use skeletal muscle mask, except for a narrow strip on the top
+    original_muscle_mask = np.copy(muscle_mask)
+    muscle_mask = compose_muscle_mask(muscle_mask, skmuscle_mask, tol=10)
+
+    # Calculate body_mask, its EDT, and its perimeter
+    body_with_skin_mask = np.ones_like(muscle_mask, dtype=bool)
+    body_with_skin_mask[air_mask!=0] = 0
+    body_with_skin_mask = ndi.binary_fill_holes(body_with_skin_mask)
+    body_edt = ndi.distance_transform_edt(body_with_skin_mask)
+    body_perimeter = np.sum([body_edt==1])
+    # Calculate body with skin centroid
+    row_c, col_c = ndi.center_of_mass(body_with_skin_mask)
+    row_c = int( np.round(row_c) )
+    col_c = int( np.round(col_c) )
+
+    # Use body_with_skin_mask information above to
+    # remove skin from muscle_mask and from fat_mask
+    cumulative_sum = 0
+    thick = 1
+    while cumulative_sum < body_perimeter:
+        cumulative_sum += np.sum(fat_mask[body_edt==thick])
+        thick += 1
+    # off_skin is the region inside the skin
+    off_skin = np.ones_like(muscle_mask, dtype=bool)
+    off_skin[body_edt <= thick] = 0
+
+    # First estimate for muscle_mask (skin removed)
+    muscle_mask = np.bitwise_and(muscle_mask, off_skin)
+
+    # Threshold used to remove small objects from body_mask,
+    # based on the average of few examples: factor = 0.0025 or 0.0030
+    thres = int( np.round( 0.0030 * np.sum(body_with_skin_mask) ) )
+    print('Small objects threshold:', thres)
+
+    # Remove temporarily small objects from muscle mask
+    aux_muscle_mask = remove_small_CCs(muscle_mask, thres=thres)
+
+    # Calculate body mask
+    body_mask = np.bitwise_or(fat_mask, aux_muscle_mask)
+    body_mask = ndi.binary_opening( ndi.binary_fill_holes(body_mask), \
+                                iterations=3, structure=disk(1) ) 
+    body_mask = remove_small_CCs(body_mask, thres=thres)
+
+    # Calculate skin_mask, adding 1-pixel thick external line
+    skin_mask = bitwise_minus(body_with_skin_mask, body_mask)
+    skin_mask[body_edt==1] = 1
+    skin_mask = np.bitwise_and(skin_mask, 1 - off_skin)
+    skin_mask = ndi.binary_closing(skin_mask, iterations=3, structure=disk(1))
+    fig_size = (16,16)
+    fig = plt.figure(figsize=fig_size)
+    ax1 = fig.add_subplot(221)
+    minimo = np.min(dicom_image_array) 
+    dicom_image_array[skin_mask==1] = minimo
+    return dicom_image_array

@@ -541,6 +541,22 @@ class PlotWidgetModify(QWidget):
         self.axes.imshow(dicom_image_array, cmap='gray')
         self.view.draw()
         superpixel_auth = False
+    def DeleteSkin(self):
+        """This method reset the dicom image, reading the original image again.
+        So, the CLAHE method needs to be applied after this method."""
+        self.ChangeSuperpixelAuth()
+        global dicom_image_array
+        global fileName_global
+        global superpixel_auth
+        if fileName_global != '':
+            dicom_image_array = dicom2array(pydicom.dcmread(fileName_global, force=True))
+            # The function that makes the method
+            dicom_image_array = removeSkinAndObjects(dicom_image_array)           
+            dicom_image_array = ConvertToUint8(dicom_image_array)
+
+        self.axes.imshow(dicom_image_array, cmap='gray')
+        self.view.draw()
+        superpixel_auth = False
 
 # Class that manage the layout of the window.
 class ImageViewer(QMainWindow):
@@ -826,6 +842,23 @@ class ImageViewer(QMainWindow):
                 self.plotsuperpixelmask.showSavedMask()
             else:
                 self.plotsuperpixelmask.UpdateView()  
+    def RemoveSkin(self):
+            global dicom_image_array
+            global segments_global
+            global mask3d
+            # self.plotwidget_original.DeleteObjects()
+            if not np.array_equal(dicom_image_array, []):
+                if(masks_empty == True):
+                    self.plotsuperpixelmask.im = ""
+                self.plotwidget_modify.DeleteSkin()
+                if(np.array_equal(segments_global, []) and not np.array_equal(mask3d, [])):
+                    self.recoveryMask3d()
+                    self.plotsuperpixelmask.showSavedMask()
+                elif(not np.array_equal(mask3d, [])):
+                    self.recoveryMask3d()
+                    self.plotsuperpixelmask.showSavedMask()
+                else:
+                    self.plotsuperpixelmask.UpdateView()  
     def about(self):
         QMessageBox.about(self, "LAMAC",
                           "<p>Segmentador Manual !!! </p>")
@@ -877,6 +910,14 @@ class ImageViewer(QMainWindow):
             f = open("./defaultMaskDir.txt")
             saveDir = f.readline()
             f.close()
+    def alternar(self):
+        global numSegments
+        if(numSegments == 2000):
+            numSegments = 500
+        elif(numSegments == 500):
+            numSegments = 5000
+        else:
+            numSegments = 2000
 
     def createActions(self):
         """Create the actions to put in menu options"""
@@ -892,6 +933,8 @@ class ImageViewer(QMainWindow):
                                               triggered=self.OriginalImage)
         self.RemoveObjectsAct = QtGui.QAction("&Remove Objects", self,  shortcut="Ctrl+R",
                                               triggered=self.RemoveObjects)
+        self.RemoveSkinAndObjectsAct = QtGui.QAction("&Remove Skin and Objects", self,  shortcut="Ctrl+Shift+R",
+                                              triggered=self.RemoveSkin)
         
         self.aboutAct = QtGui.QAction("&About", self, triggered=self.about)
 
@@ -909,6 +952,8 @@ class ImageViewer(QMainWindow):
                                      triggered=self.setDefaultOpen)
         self.setDefaultSaveDirAct = QtGui.QAction("&Default Save Directory", self,
                                      triggered=self.setDefaultSave)
+        self.alternarAct = QtGui.QAction("&Alternar", self, shortcut="Ctrl+F",
+                                     triggered=self.alternar)
     def createMenus(self):
         """Put the created actions in a menu"""
         self.fileMenu = QMenu("&File", self)
@@ -921,12 +966,14 @@ class ImageViewer(QMainWindow):
         self.viewMenu.addAction(self.HistMethodCLAHEAct)
         self.viewMenu.addAction(self.OriginalImageAct)
         self.viewMenu.addAction(self.RemoveObjectsAct)
+        self.viewMenu.addAction(self.RemoveSkinAndObjectsAct)
         self.viewMenu.addAction(self.backPaintAct)
         self.viewMenu.addAction(self.calculatePercentagesAct)
         self.optionsMenu = QMenu("&Options", self)
         self.optionsMenu.addAction(self.changeOptionsAct)
         self.optionsMenu.addAction(self.setDefaultOpenDirAct)
         self.optionsMenu.addAction(self.setDefaultSaveDirAct)
+        self.optionsMenu.addAction(self.alternarAct)
         self.helpMenu = QMenu("&Help", self)
         self.helpMenu.addAction(self.aboutAct)
         self.helpMenu.addAction(self.aboutQtAct)
