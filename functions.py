@@ -151,7 +151,7 @@ class CustomDialog(QDialog):
         self.setLayout(self.layout)
     def show(self):
         return self.exec_()
-def removeSkinAndObjects(dicom_image_array):
+def removeSkinAndObjects(dicom_image_array, m):
     dicom_image_array = select_RoI(dicom_image_array)
     rows, cols = dicom_image_array.shape
     # Segmentation using HU standard values without skin
@@ -183,7 +183,7 @@ def removeSkinAndObjects(dicom_image_array):
     # remove skin from muscle_mask and from fat_mask
     cumulative_sum = 0
     thick = 1
-    while cumulative_sum < body_perimeter:
+    while cumulative_sum < m*body_perimeter:
         cumulative_sum += np.sum(fat_mask[body_edt==thick])
         thick += 1
     # off_skin is the region inside the skin

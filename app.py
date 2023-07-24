@@ -34,6 +34,7 @@ colorvec = np.array([255, 255, 0])
 # Defines if the 'mask3d' or 'masks' variables needs to be created again
 masks_empty = True
 # Aproximated number of superpixels segments
+multiplicator = 1.0
 numSegments = 2000
 sigma_slic = 1
 compactness = 0.05
@@ -197,9 +198,11 @@ class Form(QDialog):
         global max_num_iter
         global min_size_factor
         global max_size_factor
+        global multiplicator
         self.setWindowTitle("Parâmetros")
         self.labelSuperpixel = QLabel("<h1>Superpixel</h1>")
         self.labelClahe = QLabel("<h1>Clahe</h1>")
+        self.labelSkin = QLabel("<h1>Skin Segmentation</h1>")
         self.label1 = QLabel("Superpixels")
         self.input1 = QLineEdit(str(numSegments))
         self.input1.setValidator(QIntValidator(1000, 10000))
@@ -228,6 +231,10 @@ class Form(QDialog):
         self.input8 = QDoubleSpinBox()
         self.input8.setValue(max_size_factor)
         self.input8.setMaximum(100)
+        self.label9 = QLabel("cumulative sum multiplicator")
+        self.input9 = QDoubleSpinBox()
+        self.input9.setValue(multiplicator)
+        self.input9.setMaximum(3)
         self.button = QPushButton("Ok")
         QBtn = QDialogButtonBox.Yes | QDialogButtonBox.No
         self.buttonBox = QDialogButtonBox(QBtn)
@@ -237,6 +244,8 @@ class Form(QDialog):
         layoutLabel1.addWidget(self.labelSuperpixel)
         layoutLabel2 = QHBoxLayout()
         layoutLabel2.addWidget(self.labelClahe)
+        layoutLabel3 = QHBoxLayout()
+        layoutLabel3.addWidget(self.labelSkin)
         layout1 = QHBoxLayout()
         layout1.addWidget(self.label1)
         layout1.addWidget(self.input1)
@@ -261,6 +270,9 @@ class Form(QDialog):
         layout8 = QHBoxLayout()
         layout8.addWidget(self.label8)
         layout8.addWidget(self.input8)
+        layout9 = QHBoxLayout()
+        layout9.addWidget(self.label9)
+        layout9.addWidget(self.input9)
         layout = QVBoxLayout()
         layout.addLayout(layoutLabel1)
         layout.addLayout(layout1)
@@ -272,6 +284,8 @@ class Form(QDialog):
         layout.addLayout(layoutLabel2)
         layout.addLayout(layout4)
         layout.addLayout(layout5)
+        layout.addLayout(layoutLabel3)
+        layout.addLayout(layout9)
         layout.addWidget(self.buttonBox)
         self.setLayout(layout)
     def accept(self):
@@ -283,6 +297,7 @@ class Form(QDialog):
         global max_num_iter
         global min_size_factor
         global max_size_factor
+        global multiplicator
         numSegments = int(self.input1.text())
         clip_limit = float(self.input4.text().replace(",", "."))
         sigma_slic = int(self.input3.text())
@@ -291,6 +306,7 @@ class Form(QDialog):
         max_num_iter = int(self.input6.text())
         min_size_factor = float(self.input7.text().replace(",", "."))
         max_size_factor = float(self.input8.text().replace(",", "."))
+        multiplicator = float(self.input9.text().replace(",", "."))
         self.close()
 # Class of the toolbar of the ploted image
 class MplToolbar(NavigationToolbar2QT):
@@ -548,10 +564,11 @@ class PlotWidgetModify(QWidget):
         global dicom_image_array
         global fileName_global
         global superpixel_auth
+        global multiplicator
         if fileName_global != '':
             dicom_image_array = dicom2array(pydicom.dcmread(fileName_global, force=True))
             # The function that makes the method
-            dicom_image_array = removeSkinAndObjects(dicom_image_array)           
+            dicom_image_array = removeSkinAndObjects(dicom_image_array, multiplicator)           
             dicom_image_array = ConvertToUint8(dicom_image_array)
 
         self.axes.imshow(dicom_image_array, cmap='gray')
@@ -889,16 +906,21 @@ class ImageViewer(QMainWindow):
         graph.show()
     def setDefaultOpen(self):
         global openDir
-        openDir = QFileDialog.getExistingDirectory(self)
-        f = open("./defaultImageDir.txt", "w")
-        f.write(openDir)
-        f.close()
+        Dir = QFileDialog.getExistingDirectory(self)
+        if(Dir != ""):
+            openDir = Dir
+            f = open("./defaultImageDir.txt", "w")
+            f.write(openDir)
+            f.close()
     def setDefaultSave(self):
         global saveDir
-        saveDir = QFileDialog.getExistingDirectory(self)
-        f = open("./defaultMaskDir.txt", "w")
-        f.write(saveDir)
-        f.close()
+        Dir = QFileDialog.getExistingDirectory(self)
+        
+        if(Dir !=  ""):
+            saveDir = Dir
+            f = open("./defaultMaskDir.txt", "w")
+            f.write(saveDir)
+            f.close()
     def getDirsPath(self):
         global saveDir
         global openDir
