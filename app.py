@@ -6,7 +6,6 @@ import cv2 as cv2
 from matplotlib import pyplot as plt
 import skimage.filters.edges
 import pydicom.encoders.gdcm
-import gdcm
 from libjpeg import decode_pixel_data
 import pydicom.encoders.pylibjpeg
 import pydicom.pixel_data_handlers.pylibjpeg_handler
@@ -18,6 +17,7 @@ import copy
 from PIL import Image
 from os import path
 from scipy.ndimage import binary_fill_holes
+area = 1
 saveDir = ""
 openDir = ""
 graph = ""
@@ -157,9 +157,10 @@ class PercentagesGraph(QWidget):
         global mask3d
         global informacoes
         global dictTissues
+        global area
         if(not (np.array_equal(mask3d, []) 
         or np.array_equal(segmentedMask, []))):
-            totalpixels = np.count_nonzero((binary_fill_holes(segmentedMask)))
+            totalpixels = area
             labels = []
             sizes = []
             listKeys = list(dictTissues.keys())
@@ -355,6 +356,8 @@ class MplToolbar(NavigationToolbar2QT):
                     np.savetxt(filePath, segmentedMask, fmt='%d', delimiter=',')  
                     f = open(filePath, "ab")
                     np.savetxt(f, np.array(informacoesLista), fmt='%d', newline=' ', delimiter=',')
+                    f.write(b"\n")
+                    np.savetxt(f, [np.count_nonzero(ConvertToUint8(select_RoI(dicom2array(pydicom.dcmread(fileName_global, force=True)))))], fmt='%d', delimiter=',')
                     f.close()
     # Rollbacks a state of the paint, copying the saved mask to the mask3d
     # deleting the copied and updating the view to the new mask with rollback
@@ -735,6 +738,7 @@ class ImageViewer(QMainWindow):
         global superpixel_auth
         global previous_paints
         global previous_segments
+        global area
         previous_segments = {"superpixel":[], "previous_identifier":[]}
         previous_paints = []
         superpixel_auth = False
@@ -744,7 +748,8 @@ class ImageViewer(QMainWindow):
                 csvFlag = True
                 file = open(fileName_global)
                 lines = file.readlines()
-                informacoesStr = lines[lines.__len__()-1].split(" ")[:-1]
+                area = int(lines[lines.__len__()-1].strip())
+                informacoesStr = lines[lines.__len__()-2].split(" ")[:-1]
                 for i in range(informacoesStr.__len__()):
                     informacoesStr[i] = informacoesStr[i].split(",")
                 informacoesInt = np.array(informacoesStr, dtype=int)
@@ -754,7 +759,7 @@ class ImageViewer(QMainWindow):
                     informacoes["identifier"].append(informacoesInt[i][3])
                     informacoes["tissue"].append(informacoesInt[i][4])
                 tempMask = []
-                for i in range(lines.__len__()-1):
+                for i in range(lines.__len__()-2):
                     tempMask.append(np.array(lines[i].split(","), dtype=int))
                 segmentedMask = np.array(tempMask, dtype=int)
                 self.recoveryMask3d()
@@ -765,6 +770,8 @@ class ImageViewer(QMainWindow):
             else:
                 dicom_image_array = dicom2array(pydicom.dcmread(fileName_global, force=True))
                 dicom_image_array =  ConvertToUint8(dicom_image_array)
+                area = np.count_nonzero(ConvertToUint8(select_RoI(dicom2array(pydicom.dcmread(fileName_global, force=True)))))
+                print(area)
                 # self.plotwidget_original.on_change()
                 self.plotwidget_modify.on_change()
                 ok = 0
