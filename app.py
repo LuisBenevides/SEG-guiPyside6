@@ -148,7 +148,7 @@ class PercentagesGraph(QWidget):
         super().__init__()
         self.view = FigureCanvas(Figure(figsize=(10, 6)))
         self.axes = self.view.figure.subplots()
-        self.axes.set_title("Gráfico")
+        self.axes.set_title("Tissues/percentages")
         vlayout = QVBoxLayout()
         vlayout.addWidget(self.view)
         self.setLayout(vlayout) 
@@ -413,9 +413,11 @@ class PlotSuperPixelMask(QWidget):
             if(self.im == ""):
                 # Clear previous views
                 self.axes.clear()
+                self.axes.set_title("Máscara/SuperPixel")
                 # Shows the new view
                 self.im = self.axes.imshow(mark_boundaries(mask3d, segments_global))
                 self.view.draw()
+                
             else:
                 self.im.set_clim([0, 255])
                 self.im.set_data(mark_boundaries(mask3d, segments_global))
@@ -423,6 +425,7 @@ class PlotSuperPixelMask(QWidget):
         else:
             if(self.im == ""):
                 self.axes.clear()
+                self.axes.set_title("Máscara/SuperPixel")
                 self.im = self.axes.imshow(dicom_image_array, cmap='gray')
                 self.view.draw()
             else:
@@ -431,11 +434,13 @@ class PlotSuperPixelMask(QWidget):
                 self.view.draw()
     def showSavedMask(self):
         self.axes.clear()
+        self.axes.set_title("Máscara/SuperPixel")
         self.im = self.axes.imshow(mask3d)
         self.view.draw()
     # Self explanatory
     def ClearView(self):
         self.axes.clear()
+        self.axes.set_title("Máscara/SuperPixel")
     # Apply the superpixel segmentation to the current dicom image array
     def SuperPixel(self):
         global dicom_image_array
@@ -453,11 +458,13 @@ class PlotSuperPixelMask(QWidget):
         segments_global = slic(dicom_image_array, n_segments=numSegments, sigma=sigma_slic, \
                         multichannel=False, compactness=compactness, start_label=1, max_num_iter=max_num_iter, min_size_factor=min_size_factor, max_size_factor=max_size_factor)
         self.axes.clear()
+        self.axes.set_title("Máscara/SuperPixel")
         if(not np.array_equal(mask3d, [])):
                 self.im = self.axes.imshow(mark_boundaries(mask3d, segments_global))
         else:
                 self.im = self.axes.imshow(mark_boundaries(dicom_image_array/255, segments_global), cmap='gray')
         self.view.draw()
+        
         superpixel_auth = True
 
 
@@ -509,6 +516,7 @@ class PlotWidgetModify(QWidget):
             if(dicom_image_array.max()<=1):
                 dicom_image_array[:,:] = (dicom_image_array[:,:]*255).astype('uint8')
             self.axes.clear()
+            self.axes.set_title("Imagem Conferência")
             self.axes.imshow(dicom_image_array, cmap='gray')
             self.view.draw()
             superpixel_auth = False
@@ -523,11 +531,10 @@ class PlotWidgetModify(QWidget):
         # if fileName_global != '': 
         #     self.dicom_image = dicom2array(pydicom.dcmread(fileName_global , force = True))
         self.axes.clear()
-
+        self.axes.set_title("Imagem Conferência")
         if fileName_global != '':
             self.axes.imshow(dicom_image_array, cmap='gray')
             self.view.draw()
-
     # Reset the dicom image array
     def ResetDicom(self):
         self.ChangeSuperpixelAuth()
@@ -539,8 +546,10 @@ class PlotWidgetModify(QWidget):
             dicom_image_array = dicom2array(pydicom.dcmread(fileName_global, force=True))
             # Convert to uint8 to display again
             dicom_image_array = ConvertToUint8(dicom_image_array)
+        self.axes.set_title("Imagem Conferência")
         self.axes.imshow(dicom_image_array, cmap='gray')
         self.view.draw()
+        
         superpixel_auth = False
 
     # Apply the delete objects method(removes unwanted objects)
@@ -559,6 +568,7 @@ class PlotWidgetModify(QWidget):
 
         self.axes.imshow(dicom_image_array, cmap='gray')
         self.view.draw()
+        self.axes.set_title("Imagem Conferência")
         superpixel_auth = False
     def DeleteSkin(self):
         """This method reset the dicom image, reading the original image again.
@@ -573,7 +583,7 @@ class PlotWidgetModify(QWidget):
             # The function that makes the method
             dicom_image_array = removeSkinAndObjects(dicom_image_array, multiplicator)           
             dicom_image_array = ConvertToUint8(dicom_image_array)
-
+        self.axes.set_title("Imagem Conferência")
         self.axes.imshow(dicom_image_array, cmap='gray')
         self.view.draw()
         superpixel_auth = False
@@ -591,7 +601,10 @@ class ImageViewer(QMainWindow):
         self.bar.addAction(self.color_action)
         # Put yellow as default color to paint
         self.set_color(Qt.yellow)
-
+        self.bar.addWidget(QLabel(" Current tissue: "))
+        self.current_tissue = QLabel("")
+        self.bar.addWidget(self.current_tissue)
+        self.current_tissue.setText("None")
         # self.plotwidget_original = PlotWidgetOriginal()
 
         # Store the instanced object of the widget modified class
@@ -658,6 +671,10 @@ class ImageViewer(QMainWindow):
             index = 0
             for i in range(informacoes["colors"].__len__()):
                 if(np.array_equal(informacoes["colors"][i], selectedColor)):
+                    tissue = informacoes["tissue"][i]
+                    for key in dictTissues.keys():
+                        if(dictTissues[key] == tissue):
+                            self.current_tissue.setText(key)
                     verif = True
                     index = i
             if(verif):
@@ -668,6 +685,7 @@ class ImageViewer(QMainWindow):
                 if(ok):
                     self.set_color(color)
                     if(informacoes["tissue"].count(dictTissues[item])>0):
+                        self.current_tissue.setText(item)
                         currentTissue = informacoes["tissue"].index(dictTissues[item]) + 1
                         informacoes["colors"][currentTissue-1] = selectedColor
                         if(not np.array_equal(mask3d, [])):
@@ -687,6 +705,7 @@ class ImageViewer(QMainWindow):
                         informacoes["identifier"].append(size+1)
                         informacoes["tissue"].append(dictTissues[item])            
                         currentTissue = size+1  
+                        self.current_tissue.setText(item)
 
     def set_color(self, color: QColor = Qt.black):
         """ Changes the color icon for the selected """
@@ -765,13 +784,13 @@ class ImageViewer(QMainWindow):
                 self.recoveryMask3d()
                 file.close()
                 self.plotwidget_modify.axes.clear()
+                self.plotwidget_modify.axes.set_title("Imagem Conferência")
                 self.plotwidget_modify.view.draw()
                 dicom_image_array = []
             else:
                 dicom_image_array = dicom2array(pydicom.dcmread(fileName_global, force=True))
                 dicom_image_array =  ConvertToUint8(dicom_image_array)
                 area = np.count_nonzero(ConvertToUint8(select_RoI(dicom2array(pydicom.dcmread(fileName_global, force=True)))))
-                print(area)
                 # self.plotwidget_original.on_change()
                 self.plotwidget_modify.on_change()
                 ok = 0
@@ -799,6 +818,7 @@ class ImageViewer(QMainWindow):
                     informacoes["identifier"].append(1)
                     informacoes["tissue"].append(dictTissues[item]) 
                     currentTissue = 1
+                    self.current_tissue.setText(item)
                     self.set_color(Qt.yellow)
                     imageViewer.plotsuperpixelmask.UpdateView()
                 csvFlag = False
