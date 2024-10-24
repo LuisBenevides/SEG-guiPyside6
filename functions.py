@@ -26,10 +26,20 @@ import pydicom
 from skimage import exposure
 from skimage.measure import label, regionprops
 from skimage.morphology import disk
+from enum import Enum
 def bitwise_minus(img1, img2):
     """Set subtraction applied to the images."""
     return np.bitwise_and( img1, 1 - img2 )
+class _Mode(str, Enum):
+    NONE = ""
+    CLEAR = "clear"
 
+    def __str__(self):
+        return self.value
+
+    @property
+    def _navigate_mode(self):
+        return self.name if self is not _Mode.NONE else None
 def remove_small_CCs(mask, thres=100, connectivity=1):
     labels, num_labels = label(mask, background=0, \
                                return_num=True, connectivity=connectivity)

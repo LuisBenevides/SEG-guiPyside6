@@ -1,3 +1,4 @@
+from collections import namedtuple
 from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtWidgets import *
 from PySide6.QtGui import *
@@ -6,12 +7,14 @@ import cv2 as cv2
 from matplotlib import pyplot as plt
 import skimage.filters.edges
 import pydicom.encoders.gdcm
+import gdcm
 from libjpeg import decode_pixel_data
 import pydicom.encoders.pylibjpeg
 import pydicom.pixel_data_handlers.pylibjpeg_handler
 from skimage.segmentation import mark_boundaries
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvas
+from functions import _Mode
 from functions import *
 import copy
 from PIL import Image
@@ -22,6 +25,7 @@ saveDir = ""
 openDir = ""
 graph = ""
 # The superpixel mask is here
+undo = 0
 segments_global = []
 # The Painted(rgb) mask is here
 mask3d  = []
@@ -51,7 +55,7 @@ dictTissues = {"Fat":1,"Intramuscular Fat":2, "Visceral Fat":3, "Bone":4, "Muscl
 currentPlot = 0
 csvFlag = False
 # Click event for paint superpixel
-def mouse_event(event):
+def mouse_event(event, plot=int):
     global segments_global
     global superpixel_auth
     if ((event.xdata != None or event.ydata != None) 
@@ -70,9 +74,9 @@ def mouse_event(event):
         and currentPlot == 1
         ))
     ): 
-        paintSuperPixel(event.xdata,event.ydata,segments_global)
+        paintSuperPixel(event.xdata,event.ydata,segments_global, plot)
 
-def paintSuperPixel(x,y,segments):
+def paintSuperPixel(x,y,segments, plot=int):
     global masks
     # fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(6, 6))
     global mask3d 
@@ -102,18 +106,32 @@ def paintSuperPixel(x,y,segments):
             previous_paints.__delitem__(0)
             previous_segments["superpixel"].__delitem__(0)
             previous_segments["previous_identifier"].__delitem__(0)
-    segmentedMask[segments==segments[int(y)][int(x)]] = currentTissue        
-    # Verify what segments of segments global are equals to 
-    # the clicked segment to change this masks elements to 1, 
-    # instead of false
-    masks[segments == segments[int(y)][int(x)]] = 1
-    # show the masked region
-    ## D_I_A = ((255 * dicom_image_array) * (~masks)).astype('uint8') 
+    if((plot == 1 and undo == 1) or(plot == 2 and undo == 2) or undo == 3):
+        masks = np.ones_like(dicom_image_array, dtype="bool")
+        segmentedMask[segments==segments[int(y)][int(x)]] = 0       
+        # Verify what segments of segments global are equals to 
+        # the clicked segment to change this masks elements to 1, 
+        # instead of false
+        masks[segments == segments[int(y)][int(x)]] = 0
+        # show the masked region
+        ## D_I_A = ((255 * dicom_image_array) * (~masks)).astype('uint8') 
 
-    mask3d[:,:,0] = informacoes['colors'][currentTissue -1][0] * masks + mask3d[:,:,0]*(~masks).astype('uint8')
-    mask3d[:,:,1] = informacoes['colors'][currentTissue -1][1] * masks + mask3d[:,:,1]*(~masks).astype('uint8')
-    mask3d[:,:,2] = informacoes['colors'][currentTissue -1][2] * masks + mask3d[:,:,2]*(~masks).astype('uint8')
-    
+        mask3d[:,:,0] = dicom_image_array  * (~masks).astype('uint8') + mask3d[:,:,0]*(masks).astype('uint8')
+        mask3d[:,:,1] = dicom_image_array  * (~masks).astype('uint8') + mask3d[:,:,1]*(masks).astype('uint8')
+        mask3d[:,:,2] = dicom_image_array  * (~masks).astype('uint8') + mask3d[:,:,2]*(masks).astype('uint8')
+    else:
+        segmentedMask[segments==segments[int(y)][int(x)]] = currentTissue        
+        # Verify what segments of segments global are equals to 
+        # the clicked segment to change this masks elements to 1, 
+        # instead of false
+        masks[segments == segments[int(y)][int(x)]] = 1
+        # show the masked region
+        ## D_I_A = ((255 * dicom_image_array) * (~masks)).astype('uint8') 
+
+        mask3d[:,:,0] = informacoes['colors'][currentTissue -1][0] * masks + mask3d[:,:,0]*(~masks).astype('uint8')
+        mask3d[:,:,1] = informacoes['colors'][currentTissue -1][1] * masks + mask3d[:,:,1]*(~masks).astype('uint8')
+        mask3d[:,:,2] = informacoes['colors'][currentTissue -1][2] * masks + mask3d[:,:,2]*(~masks).astype('uint8')
+        
     # Update the mask with the new rgb mask(with the new painted superpixel)
     imageViewer.plotsuperpixelmask.UpdateView()
 
@@ -148,7 +166,7 @@ class PercentagesGraph(QWidget):
         super().__init__()
         self.view = FigureCanvas(Figure(figsize=(10, 6)))
         self.axes = self.view.figure.subplots()
-        self.axes.set_title("Gráfico")
+        self.axes.set_title("Tissues/percentages")
         vlayout = QVBoxLayout()
         vlayout.addWidget(self.view)
         self.setLayout(vlayout) 
@@ -311,8 +329,9 @@ class Form(QDialog):
         self.close()
 # Class of the toolbar of the ploted image
 class MplToolbar(NavigationToolbar2QT):
-    def __init__(self, canvas_, parent_):
+    def __init__(self, canvas_, parent_, plot=int):
         backend.figureoptions = None
+        
         self.toolitems = (
             ('Home', 'Reset original view', 'home', 'home'),
             ('Back', 'Back to previous view', 'back', 'back'),
@@ -321,9 +340,50 @@ class MplToolbar(NavigationToolbar2QT):
             ('Pan', 'Pan axes with left mouse, zoom with right', 'move', 'pan'),
             ('Zoom', 'Zoom to rectangle', 'zoom_to_rect', 'zoom'),
             ('Port', 'Back to the previous paint', "back", 'back_paint'),
+            ('Clear', 'Undo an especific paint', path.realpath(path.curdir)+"/trash", 'change_undo'),
             ('Save', 'Save the current image', 'filesave', 'save_mask'),
             )
         NavigationToolbar2QT.__init__(self, canvas_, parent_)
+        self._actions['change_undo'].setCheckable(True)
+        self.undo = False
+        self.plot = plot
+    def _update_buttons_checked(self):
+        if 'change_undo' in self._actions:
+            self._actions['change_undo'].setChecked(self.undo)
+        if 'pan' in self._actions:
+            self._actions['pan'].setChecked(self.mode.name == 'PAN')
+        if 'zoom' in self._actions:
+            self._actions['zoom'].setChecked(self.mode.name == 'ZOOM')
+    def change_undo(self):
+        global undo
+        self.undo = not self.undo
+        if(self.undo):
+            if(self.plot == 1 and undo == 0):
+                undo = 1
+            elif(self.plot == 2 and undo == 0):
+                undo = 2
+            else:
+                undo = 3
+        else:
+            if(self.plot == 1 and undo == 1):
+                undo = 0
+            elif(self.plot == 2 and undo == 2):
+                undo = 0
+            elif(self.plot == 1 and undo == 3):
+                undo = 2
+            else:
+                undo = 1
+        if self.mode == _Mode.CLEAR:
+            self.mode = _Mode.NONE
+            self.canvas.widgetlock.release(self)
+        else:
+            self.mode = _Mode.CLEAR
+            self.canvas.widgetlock(self)
+        for a in self.canvas.figure.get_axes():
+            a.set_navigate_mode(self.mode._navigate_mode)
+        self.set_message(self.mode)
+        _ZoomInfo = namedtuple("_ZoomInfo", "direction start_xy axes cid cbar")
+        self._update_buttons_checked()
     # Function to save the mask to png
     def save_mask(self):
         global segmentedMask
@@ -387,11 +447,11 @@ class MplToolbar(NavigationToolbar2QT):
 class PlotSuperPixelMask(QWidget):
     def __init__(self):
         super().__init__()
-        self.view = FigureCanvas(Figure(figsize=(5, 3)))
+        self.view = FigureCanvas()
         self.axes = self.view.figure.subplots()
         self.axes.set_title("Máscara/SuperPixel")
         # Includes the toolbar
-        self.toolbar = MplToolbar(self.view, self)
+        self.toolbar = MplToolbar(self.view, self, 1)
         # Create the event associated with a function on click
         self.view.mpl_connect('button_press_event', self.callMouseEvent)
         self.im = ""
@@ -403,7 +463,7 @@ class PlotSuperPixelMask(QWidget):
     def callMouseEvent(self, event):
         global currentPlot
         currentPlot = 0
-        mouse_event(event)
+        mouse_event(event, 1)
     def UpdateView(self):
         global mask3d
         global masks_empty
@@ -413,9 +473,11 @@ class PlotSuperPixelMask(QWidget):
             if(self.im == ""):
                 # Clear previous views
                 self.axes.clear()
+                self.axes.set_title("Máscara/SuperPixel")
                 # Shows the new view
                 self.im = self.axes.imshow(mark_boundaries(mask3d, segments_global))
                 self.view.draw()
+                
             else:
                 self.im.set_clim([0, 255])
                 self.im.set_data(mark_boundaries(mask3d, segments_global))
@@ -423,6 +485,7 @@ class PlotSuperPixelMask(QWidget):
         else:
             if(self.im == ""):
                 self.axes.clear()
+                self.axes.set_title("Máscara/SuperPixel")
                 self.im = self.axes.imshow(dicom_image_array, cmap='gray')
                 self.view.draw()
             else:
@@ -431,11 +494,13 @@ class PlotSuperPixelMask(QWidget):
                 self.view.draw()
     def showSavedMask(self):
         self.axes.clear()
+        self.axes.set_title("Máscara/SuperPixel")
         self.im = self.axes.imshow(mask3d)
         self.view.draw()
     # Self explanatory
     def ClearView(self):
         self.axes.clear()
+        self.axes.set_title("Máscara/SuperPixel")
     # Apply the superpixel segmentation to the current dicom image array
     def SuperPixel(self):
         global dicom_image_array
@@ -451,13 +516,15 @@ class PlotSuperPixelMask(QWidget):
         global max_size_factor
         # apply SLIC and extract (approximately) the supplied number of segments
         segments_global = slic(dicom_image_array, n_segments=numSegments, sigma=sigma_slic, \
-                        multichannel=False, compactness=compactness, start_label=1, max_num_iter=max_num_iter, min_size_factor=min_size_factor, max_size_factor=max_size_factor)
+                        channel_axis=None, compactness=compactness, start_label=1, max_num_iter=max_num_iter, min_size_factor=min_size_factor, max_size_factor=max_size_factor)
         self.axes.clear()
+        self.axes.set_title("Máscara/SuperPixel")
         if(not np.array_equal(mask3d, [])):
                 self.im = self.axes.imshow(mark_boundaries(mask3d, segments_global))
         else:
                 self.im = self.axes.imshow(mark_boundaries(dicom_image_array/255, segments_global), cmap='gray')
         self.view.draw()
+        
         superpixel_auth = True
 
 
@@ -475,10 +542,10 @@ class PlotWidgetModify(QWidget):
     def __init__(self):
         super().__init__()
         self.segments =[]
-        self.view = FigureCanvas(Figure(figsize=(5, 3)))
+        self.view = FigureCanvas()
         self.axes = self.view.figure.subplots()
         self.axes.set_title("Imagem Conferência")
-        self.toolbar = MplToolbar(self.view, self)
+        self.toolbar = MplToolbar(self.view, self, 2)
         self.view.mpl_connect('button_press_event', self.callMouseEvent)
         vlayout = QVBoxLayout()
         vlayout.addWidget(self.toolbar)
@@ -489,7 +556,7 @@ class PlotWidgetModify(QWidget):
     def callMouseEvent(self, event):
         global currentPlot
         currentPlot = 1
-        mouse_event(event)
+        mouse_event(event, 2)
     # Self explanatory
     def ChangeSuperpixelAuth(self):
         global superpixel_auth
@@ -509,6 +576,7 @@ class PlotWidgetModify(QWidget):
             if(dicom_image_array.max()<=1):
                 dicom_image_array[:,:] = (dicom_image_array[:,:]*255).astype('uint8')
             self.axes.clear()
+            self.axes.set_title("Imagem Conferência")
             self.axes.imshow(dicom_image_array, cmap='gray')
             self.view.draw()
             superpixel_auth = False
@@ -523,11 +591,10 @@ class PlotWidgetModify(QWidget):
         # if fileName_global != '': 
         #     self.dicom_image = dicom2array(pydicom.dcmread(fileName_global , force = True))
         self.axes.clear()
-
+        self.axes.set_title("Imagem Conferência")
         if fileName_global != '':
             self.axes.imshow(dicom_image_array, cmap='gray')
             self.view.draw()
-
     # Reset the dicom image array
     def ResetDicom(self):
         self.ChangeSuperpixelAuth()
@@ -539,8 +606,10 @@ class PlotWidgetModify(QWidget):
             dicom_image_array = dicom2array(pydicom.dcmread(fileName_global, force=True))
             # Convert to uint8 to display again
             dicom_image_array = ConvertToUint8(dicom_image_array)
+        self.axes.set_title("Imagem Conferência")
         self.axes.imshow(dicom_image_array, cmap='gray')
         self.view.draw()
+        
         superpixel_auth = False
 
     # Apply the delete objects method(removes unwanted objects)
@@ -559,6 +628,7 @@ class PlotWidgetModify(QWidget):
 
         self.axes.imshow(dicom_image_array, cmap='gray')
         self.view.draw()
+        self.axes.set_title("Imagem Conferência")
         superpixel_auth = False
     def DeleteSkin(self):
         """This method reset the dicom image, reading the original image again.
@@ -573,7 +643,7 @@ class PlotWidgetModify(QWidget):
             # The function that makes the method
             dicom_image_array = removeSkinAndObjects(dicom_image_array, multiplicator)           
             dicom_image_array = ConvertToUint8(dicom_image_array)
-
+        self.axes.set_title("Imagem Conferência")
         self.axes.imshow(dicom_image_array, cmap='gray')
         self.view.draw()
         superpixel_auth = False
@@ -591,7 +661,10 @@ class ImageViewer(QMainWindow):
         self.bar.addAction(self.color_action)
         # Put yellow as default color to paint
         self.set_color(Qt.yellow)
-
+        self.bar.addWidget(QLabel(" Current tissue: "))
+        self.current_tissue = QLabel("")
+        self.bar.addWidget(self.current_tissue)
+        self.current_tissue.setText("None")
         # self.plotwidget_original = PlotWidgetOriginal()
 
         # Store the instanced object of the widget modified class
@@ -636,7 +709,7 @@ class ImageViewer(QMainWindow):
         self.createMenus()
         self.getDirsPath()
         # Create the size of the layout
-        self.setGeometry(250, 100, 1000, 600)
+        # self.setGeometry(250, 100, 1000, 600)
         self.setWindowTitle("LAMAC")
         self.setWindowIcon(QPixmap("./icon.png"))
 
@@ -658,6 +731,10 @@ class ImageViewer(QMainWindow):
             index = 0
             for i in range(informacoes["colors"].__len__()):
                 if(np.array_equal(informacoes["colors"][i], selectedColor)):
+                    tissue = informacoes["tissue"][i]
+                    for key in dictTissues.keys():
+                        if(dictTissues[key] == tissue):
+                            self.current_tissue.setText(key)
                     verif = True
                     index = i
             if(verif):
@@ -668,6 +745,7 @@ class ImageViewer(QMainWindow):
                 if(ok):
                     self.set_color(color)
                     if(informacoes["tissue"].count(dictTissues[item])>0):
+                        self.current_tissue.setText(item)
                         currentTissue = informacoes["tissue"].index(dictTissues[item]) + 1
                         informacoes["colors"][currentTissue-1] = selectedColor
                         if(not np.array_equal(mask3d, [])):
@@ -687,6 +765,7 @@ class ImageViewer(QMainWindow):
                         informacoes["identifier"].append(size+1)
                         informacoes["tissue"].append(dictTissues[item])            
                         currentTissue = size+1  
+                        self.current_tissue.setText(item)
 
     def set_color(self, color: QColor = Qt.black):
         """ Changes the color icon for the selected """
@@ -741,9 +820,10 @@ class ImageViewer(QMainWindow):
         global area
         previous_segments = {"superpixel":[], "previous_identifier":[]}
         previous_paints = []
-        superpixel_auth = False
-        fileName_global = self.pathFile()
-        if(fileName_global):
+        fileName = self.pathFile()
+        if(fileName):
+            superpixel_auth = False
+            fileName_global = fileName
             if(fileName_global.split(".")[1] == "csv"):
                 csvFlag = True
                 file = open(fileName_global)
@@ -765,13 +845,13 @@ class ImageViewer(QMainWindow):
                 self.recoveryMask3d()
                 file.close()
                 self.plotwidget_modify.axes.clear()
+                self.plotwidget_modify.axes.set_title("Imagem Conferência")
                 self.plotwidget_modify.view.draw()
                 dicom_image_array = []
             else:
                 dicom_image_array = dicom2array(pydicom.dcmread(fileName_global, force=True))
                 dicom_image_array =  ConvertToUint8(dicom_image_array)
                 area = np.count_nonzero(ConvertToUint8(select_RoI(dicom2array(pydicom.dcmread(fileName_global, force=True)))))
-                print(area)
                 # self.plotwidget_original.on_change()
                 self.plotwidget_modify.on_change()
                 ok = 0
@@ -799,14 +879,15 @@ class ImageViewer(QMainWindow):
                     informacoes["identifier"].append(1)
                     informacoes["tissue"].append(dictTissues[item]) 
                     currentTissue = 1
+                    self.current_tissue.setText(item)
                     self.set_color(Qt.yellow)
                     imageViewer.plotsuperpixelmask.UpdateView()
                 csvFlag = False
     def pathFile(self):
         """Get the path of the selected file"""
-        fileName_global, _ = QFileDialog.getOpenFileName(self, "Open File",
+        fileName, _ = QFileDialog.getOpenFileName(self, "Open File",
                                                          openDir, filter="DICOM (*.dcm *.);;csv(*.csv)")
-        return fileName_global
+        return fileName
 
 
     #Follow methods are self explanatory
