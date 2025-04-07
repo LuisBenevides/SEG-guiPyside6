@@ -17,8 +17,8 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 import matplotlib.backends.backend_qt5 as backend
 from PySide6.QtWidgets import *
 from PySide6.QtGui import *
-import pylibjpeg
-import libjpeg
+# import pylibjpeg
+# import libjpeg
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.ndimage as ndi
@@ -132,9 +132,24 @@ materials = {
 
 }
 def dicom2array(dcm):
-    img_raw = np.float64(dcm.pixel_array)
-    output = np.array( dcm.RescaleSlope * img_raw + dcm.RescaleIntercept, dtype=int )
-    return output
+    
+    # Verifica se a imagem DICOM está comprimida (JPEG Lossless, Process 14)
+    if dcm.file_meta.TransferSyntaxUID == "1.2.840.10008.1.2.4.70":
+        print("Imagem JPEG Lossless detectada, tentando descompactar...")
+        try:
+            dcm.decompress(handler_name="pylibjpeg")  # Usa pylibjpeg para descompressão
+        except Exception as e:
+            print(f"Erro ao descompactar: {e}")
+            return None  # Retorna None se falhar
+
+    # Converte os pixels para um array NumPy
+    try:
+        img_raw = np.float64(dcm.pixel_array)  # Converte a matriz de pixels
+        output = np.array(dcm.RescaleSlope * img_raw + dcm.RescaleIntercept, dtype=int)  
+        return output
+    except Exception as e:
+        print(f"Erro ao converter DICOM para array: {e}")
+        return None  # Retorna None em caso de erro
 def ConvertToUint8(dicom_image_array):
     orig_min = dicom_image_array.min()
     orig_max = dicom_image_array.max()
