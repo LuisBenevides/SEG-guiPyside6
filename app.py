@@ -6,10 +6,10 @@ from PySide6.QtCore import *
 import cv2 as cv2
 from matplotlib import pyplot as plt
 import skimage.filters.edges
-import pydicom.encoders.gdcm
-import gdcm
-from libjpeg import decode_pixel_data
-import pydicom.encoders.pylibjpeg
+# import pydicom.encoders.gdcm
+# import gdcm
+# from libjpeg import decode_pixel_data
+# import pydicom.encoders.pylibjpeg
 import pydicom.pixel_data_handlers.pylibjpeg_handler
 from skimage.segmentation import mark_boundaries
 from matplotlib.figure import Figure
@@ -54,6 +54,8 @@ previous_segments = {"superpixel":[], "previous_identifier":[]}
 dictTissues = {"Fat":1,"Intramuscular Fat":2, "Visceral Fat":3, "Bone":4, "Muscle":5, "Organ":6, "Other": 7}
 currentPlot = 0
 csvFlag = False
+show_superpixel = True  # inicia como visível
+
 # Click event for paint superpixel
 def mouse_event(event, plot=int):
     global segments_global
@@ -471,16 +473,19 @@ class PlotSuperPixelMask(QWidget):
         global segments_global
         if (not masks_empty):
             if(self.im == ""):
-                # Clear previous views
                 self.axes.clear()
                 self.axes.set_title("Máscara/SuperPixel")
-                # Shows the new view
-                self.im = self.axes.imshow(mark_boundaries(mask3d, segments_global))
+                if show_superpixel and not np.array_equal(segments_global, []):
+                    self.im = self.axes.imshow(mark_boundaries(mask3d, segments_global))
+                else:
+                    self.im = self.axes.imshow(mask3d)
                 self.view.draw()
-                
             else:
                 self.im.set_clim([0, 255])
-                self.im.set_data(mark_boundaries(mask3d, segments_global))
+                if show_superpixel and not np.array_equal(segments_global, []):
+                    self.im.set_data(mark_boundaries(mask3d, segments_global))
+                else:
+                    self.im.set_data(mask3d)
                 self.view.draw()
         else:
             if(self.im == ""):
@@ -1029,6 +1034,13 @@ class ImageViewer(QMainWindow):
         else:
             numSegments = 2000
 
+    def toggleSuperPixelView(self):
+        global show_superpixel, superpixel_auth
+        superpixel_auth = not superpixel_auth
+        show_superpixel = not show_superpixel
+        print(f"SuperPíxel {'visível' if show_superpixel else 'oculto'}")
+        self.plotsuperpixelmask.UpdateView()
+
     def createActions(self):
         """Create the actions to put in menu options"""
         self.openAct = QtGui.QAction("&Open...", self, shortcut="Ctrl+O",
@@ -1054,6 +1066,8 @@ class ImageViewer(QMainWindow):
                                      triggered=self.plotsuperpixelmask.toolbar.save_mask)
         self.backPaintAct = QtGui.QAction("&Back", self, shortcut="Ctrl+Z",
                                      triggered=self.plotsuperpixelmask.toolbar.back_paint)
+        self.toggleSuperPixelAct = QtGui.QAction("&Toggle SuperPixel View", self, shortcut="Ctrl+T",
+                                         triggered=self.toggleSuperPixelView)
         self.changeOptionsAct = QtGui.QAction("&Change Options", self,
                                      triggered=self.changeOptions)
         self.calculatePercentagesAct = QtGui.QAction("&Calculate Percentages", self,
@@ -1073,6 +1087,7 @@ class ImageViewer(QMainWindow):
 
         self.viewMenu = QMenu("&View", self)
         self.viewMenu.addAction(self.SuperPixelAct)
+        self.viewMenu.addAction(self.toggleSuperPixelAct)
         self.viewMenu.addAction(self.HistMethodCLAHEAct)
         self.viewMenu.addAction(self.OriginalImageAct)
         self.viewMenu.addAction(self.RemoveObjectsAct)
@@ -1092,7 +1107,7 @@ class ImageViewer(QMainWindow):
         self.menuBar().addMenu(self.viewMenu)
         self.menuBar().addMenu(self.optionsMenu)
         self.menuBar().addMenu(self.helpMenu)
-
+        
 if __name__ == '__main__':
     import sys
 
