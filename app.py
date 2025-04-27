@@ -55,6 +55,7 @@ dictTissues = {"Fat":1,"Intramuscular Fat":2, "Visceral Fat":3, "Bone":4, "Muscl
 currentPlot = 0
 csvFlag = False
 show_superpixel = True  # inicia como visível
+toggle_available = False
 
 # Click event for paint superpixel
 def mouse_event(event, plot=int):
@@ -900,6 +901,8 @@ class ImageViewer(QMainWindow):
         global dicom_image_array
         global segments_global
         global mask3d
+        self.resetToggleState()
+
         if not np.array_equal(dicom_image_array, []):
             if(masks_empty == True):
                 self.plotsuperpixelmask.im = ""
@@ -914,15 +917,18 @@ class ImageViewer(QMainWindow):
                 self.plotsuperpixelmask.UpdateView()  
     
     def SuperPixel(self):
-        global dicom_image_array
+        global dicom_image_array, toggle_available
         # self.plotwidget_original.SuperPixel()
         if not np.array_equal(dicom_image_array, []):
             self.plotsuperpixelmask.SuperPixel()
+            toggle_available = True
     def OriginalImage(self):
         global fileName_global
         global segments_global
         global mask3d
         # self.plotwidget_original.ResetDicom()
+        self.resetToggleState()
+
         if fileName_global != '':
             if not fileName_global.split(".")[1] == "csv":
                 self.plotwidget_modify.ResetDicom()
@@ -940,6 +946,8 @@ class ImageViewer(QMainWindow):
         global segments_global
         global mask3d
         # self.plotwidget_original.DeleteObjects()
+        self.resetToggleState()
+
         if not np.array_equal(dicom_image_array, []):
             if(masks_empty == True):
                 self.plotsuperpixelmask.im = ""
@@ -957,6 +965,8 @@ class ImageViewer(QMainWindow):
             global segments_global
             global mask3d
             # self.plotwidget_original.DeleteObjects()
+            self.resetToggleState()
+
             if not np.array_equal(dicom_image_array, []):
                 if(masks_empty == True):
                     self.plotsuperpixelmask.im = ""
@@ -1035,11 +1045,22 @@ class ImageViewer(QMainWindow):
             numSegments = 2000
 
     def toggleSuperPixelView(self):
-        global show_superpixel, superpixel_auth
+        global show_superpixel, superpixel_auth, segments_global, toggle_available
+
+        if not toggle_available:
+            QMessageBox.warning(self, "Aviso", "Você precisa aplicar o SuperPixel antes de usar o Toggle.")
+            return
+        
         superpixel_auth = not superpixel_auth
         show_superpixel = not show_superpixel
         print(f"SuperPíxel {'visível' if show_superpixel else 'oculto'}")
         self.plotsuperpixelmask.UpdateView()
+
+    def resetToggleState(self):
+        global show_superpixel, superpixel_auth, toggle_available
+        show_superpixel = True
+        superpixel_auth = False
+        toggle_available = False
 
     def createActions(self):
         """Create the actions to put in menu options"""
