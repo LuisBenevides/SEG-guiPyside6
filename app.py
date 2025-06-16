@@ -25,7 +25,7 @@ saveDir = ""
 openDir = ""
 graph = ""
 # The superpixel mask is here
-undo = 0 # Lixeira da aplicação
+undo = 0
 segments_global = []
 # The Painted(rgb) mask is here
 mask3d  = []
@@ -61,90 +61,27 @@ muscle_hu = []
 fat_hu = []
 radio_density_check_enabled = False  # Controla se a verificação de HU está ativa
 
-class ZoomableCanvas(FigureCanvas):
-    def __init__(self, figure, parent=None):
-        super().__init__(figure)
-        self.setParent(parent)
-        self.zoom_scroll_enabled = False  # toggle interno para o novo modo de zoom
-        self.zoom_factor = 0.8
-
-        self.setFocusPolicy(Qt.ClickFocus)
-        self.setFocus()
-
-    def wheelEvent(self, event):
-        if not self.zoom_scroll_enabled:
-            return
-
-        angle_delta = event.angleDelta().y()
-        zoom_in = angle_delta > 0
-        scale = self.zoom_factor if zoom_in else 1 / self.zoom_factor
-
-        mouse_x = event.position().x()
-        mouse_y = event.position().y()
-
-        inv = self.figure.axes[0].transData.inverted()
-        xdata, ydata = inv.transform((mouse_x, self.height() - mouse_y))
-
-        ax = self.figure.axes[0]
-        xlim = ax.get_xlim()
-        ylim = ax.get_ylim()
-
-        new_xlim = [
-            xdata - (xdata - xlim[0]) * scale,
-            xdata + (xlim[1] - xdata) * scale,
-        ]
-        new_ylim = [
-            ydata - (ydata - ylim[0]) * scale,
-            ydata + (ylim[1] - ydata) * scale,
-        ]
-
-        ax.set_xlim(new_xlim)
-        ax.set_ylim(new_ylim)
-        self.draw()
-
 # Click event for paint superpixel
-# def mouse_event(event, plot=int):
-#     global segments_global
-#     global superpixel_auth
-#     if ((event.xdata != None or event.ydata != None) 
-#     and ((event.xdata > 1 and event.ydata >1)) 
-#     and (superpixel_auth == True) 
-#     and (
-#         (
-#         (str(imageViewer.plotsuperpixelmask.toolbar._actions["zoom"]).__contains__("checked=false"))
-#         and (str(imageViewer.plotsuperpixelmask.toolbar._actions["pan"]).__contains__("checked=false"))
-#         and currentPlot == 0
-#         )
-#     or 
-#         (
-#         (str(imageViewer.plotwidget_modify.toolbar._actions["zoom"]).__contains__("checked=false"))
-#         and (str(imageViewer.plotwidget_modify.toolbar._actions["pan"]).__contains__("checked=false"))
-#         and currentPlot == 1
-#         ))
-#     ): 
-#         paintSuperPixel(event.xdata,event.ydata,segments_global, plot)
-    
 def mouse_event(event, plot=int):
     global segments_global
     global superpixel_auth
-
-    if ((event.xdata is not None and event.ydata is not None) 
-    and (event.xdata > 1 and event.ydata > 1) 
-    and superpixel_auth is True):
-
-        if (plot == 1):
-            canvas = imageViewer.plotsuperpixelmask.view
-            toolbar = imageViewer.plotsuperpixelmask.toolbar
-        else:
-            canvas = imageViewer.plotwidget_modify.view
-            toolbar = imageViewer.plotwidget_modify.toolbar
-
-        zoom_active = toolbar._actions["zoom"].isChecked()
-        pan_active = toolbar._actions["pan"].isChecked()
-        zoom_scroll_active = getattr(canvas, 'zoom_scroll_enabled', False)
-
-        if not (zoom_active or pan_active or zoom_scroll_active):
-            paintSuperPixel(event.xdata, event.ydata, segments_global, plot)
+    if ((event.xdata != None or event.ydata != None) 
+    and ((event.xdata > 1 and event.ydata >1)) 
+    and (superpixel_auth == True) 
+    and (
+        (
+        (str(imageViewer.plotsuperpixelmask.toolbar._actions["zoom"]).__contains__("checked=false"))
+        and (str(imageViewer.plotsuperpixelmask.toolbar._actions["pan"]).__contains__("checked=false"))
+        and currentPlot == 0
+        )
+    or 
+        (
+        (str(imageViewer.plotwidget_modify.toolbar._actions["zoom"]).__contains__("checked=false"))
+        and (str(imageViewer.plotwidget_modify.toolbar._actions["pan"]).__contains__("checked=false"))
+        and currentPlot == 1
+        ))
+    ): 
+        paintSuperPixel(event.xdata,event.ydata,segments_global, plot)
 
 def paintSuperPixel(x,y,segments, plot=int):
     global masks
@@ -176,14 +113,6 @@ def paintSuperPixel(x,y,segments, plot=int):
 
     previous_segments["superpixel"].append(segment_id)
     previous_segments["previous_identifier"].append(segmentedMask[int(y)][int(x)])
-
-    """
-    Realizar a implementação de novo método superpixel:
-    - Pegar valores HU
-    - Realizar comparação com materials
-    - Pintar caso valores batam
-    """
-       
     # Verify if exists more than 10 copies, for delete the older
     if(previous_paints.__len__() == 11):
             previous_paints.__delitem__(0)
@@ -212,7 +141,7 @@ def paintSuperPixel(x,y,segments, plot=int):
             elif informacoes["tissue"][currentTissue - 1] in [5]:
                 hu_mask = hu_mask * muscle_hu
 
-        segmentedMask[(hu_mask * segments)==segments[int(y)][int(x)]] = currentTissue    
+        segmentedMask[(hu_mask * segments)==segments[int(y)][int(x)]] = currentTissue            
         # Verify what segments of segments global are equals to 
         # the clicked segment to change this masks elements to 1, 
         # instead of false
@@ -431,14 +360,12 @@ class MplToolbar(NavigationToolbar2QT):
             (None, None, None, None),
             ('Pan', 'Pan axes with left mouse, zoom with right', 'move', 'pan'),
             ('Zoom', 'Zoom to rectangle', 'zoom_to_rect', 'zoom'),
-            ('ZoomScroll', 'Zoom with mouse scroll', 'zoom_to_rect', 'toggle_zoom_scroll'),
             ('Port', 'Back to the previous paint', "back", 'back_paint'),
             ('Clear', 'Undo an especific paint', path.realpath(path.curdir)+"/trash", 'change_undo'),
             ('Save', 'Save the current image', 'filesave', 'save_mask'),
             )
         NavigationToolbar2QT.__init__(self, canvas_, parent_)
         self._actions['change_undo'].setCheckable(True)
-        self._actions['toggle_zoom_scroll'].setCheckable(True)
         self.undo = False
         self.plot = plot
     def _update_buttons_checked(self):
@@ -536,23 +463,12 @@ class MplToolbar(NavigationToolbar2QT):
                 imageViewer.plotsuperpixelmask.showSavedMask()
             else:
                 imageViewer.plotsuperpixelmask.UpdateView()
-    
-    def toggle_zoom_scroll(self):
-        canvas = self.canvas
-        if hasattr(canvas, 'zoom_scroll_enabled'):
-            canvas.zoom_scroll_enabled = not canvas.zoom_scroll_enabled
-            self._actions['toggle_zoom_scroll'].setChecked(canvas.zoom_scroll_enabled)
-            if canvas.zoom_scroll_enabled:
-                self.set_message("ZoomScroll: ON")
-            else:
-                self.set_message("ZoomScroll: OFF")
 
 # Class that shows the painted image
 class PlotSuperPixelMask(QWidget):
     def __init__(self):
         super().__init__()
-        # self.view = FigureCanvas()
-        self.view = ZoomableCanvas(Figure(), self)
+        self.view = FigureCanvas()
         self.axes = self.view.figure.subplots()
         self.axes.set_title("Máscara/SuperPixel")
         # Includes the toolbar
@@ -650,8 +566,7 @@ class PlotWidgetModify(QWidget):
     def __init__(self):
         super().__init__()
         self.segments =[]
-        # self.view = FigureCanvas()
-        self.view = ZoomableCanvas(Figure(), self)
+        self.view = FigureCanvas()
         self.axes = self.view.figure.subplots()
         self.axes.set_title("Imagem Conferência")
         self.toolbar = MplToolbar(self.view, self, 2)
