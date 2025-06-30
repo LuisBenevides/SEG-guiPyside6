@@ -59,7 +59,8 @@ toggle_available = False
 
 muscle_hu = []
 fat_hu = []
-radio_density_check_enabled = False  # Controla se a verificação de HU está ativa
+selected_hu = []
+radio_density_check_enabled = True  # Controla se a verificação de HU está ativa
 
 # Click event for paint superpixel
 def mouse_event(event, plot=int):
@@ -96,7 +97,9 @@ def paintSuperPixel(x,y,segments, plot=int):
     global currentTissue
     global fat_hu
     global muscle_hu
-    inverse_dictTissues = {v: k for k, v in dictTissues.items()}
+    global radio_density_check_enabled
+    if(segments[int(y)][int(x)] == 0):
+        return
     if(np.array_equal(segmentedMask, [])):
         segmentedMask = np.zeros_like(dicom_image_array, dtype="uint8")
     if(masks_empty):
@@ -132,15 +135,14 @@ def paintSuperPixel(x,y,segments, plot=int):
         mask3d[:,:,1] = dicom_image_array  * (~masks).astype('uint8') + mask3d[:,:,1]*(masks).astype('uint8')
         mask3d[:,:,2] = dicom_image_array  * (~masks).astype('uint8') + mask3d[:,:,2]*(masks).astype('uint8')
     else:
-        hu_mask = np.ones_like(dicom_image_array, dtype=bool)
-
+        hu_mask = np.ones_like(dicom_image_array, dtype=bool)        
         if radio_density_check_enabled :
             if informacoes["tissue"][currentTissue - 1] in [1, 2, 3] :
                 
                 hu_mask = hu_mask * fat_hu
             elif informacoes["tissue"][currentTissue - 1] in [5]:
                 hu_mask = hu_mask * muscle_hu
-
+                
         segmentedMask[(hu_mask * segments)==segments[int(y)][int(x)]] = currentTissue            
         # Verify what segments of segments global are equals to 
         # the clicked segment to change this masks elements to 1, 
@@ -490,19 +492,20 @@ class PlotSuperPixelMask(QWidget):
         global masks_empty
         global dicom_image_array
         global segments_global
+        global selected_hu
         if (not masks_empty):
             if(self.im == ""):
                 self.axes.clear()
                 self.axes.set_title("Máscara/SuperPixel")
                 if show_superpixel and not np.array_equal(segments_global, []):
-                    self.im = self.axes.imshow(mark_boundaries(mask3d, segments_global))
+                    self.im = self.axes.imshow(mark_boundaries(mask3d, segments_global*selected_hu))
                 else:
                     self.im = self.axes.imshow(mask3d)
                 self.view.draw()
             else:
                 self.im.set_clim([0, 255])
                 if show_superpixel and not np.array_equal(segments_global, []):
-                    self.im.set_data(mark_boundaries(mask3d, segments_global))
+                    self.im.set_data(mark_boundaries(mask3d, segments_global*selected_hu))
                 else:
                     self.im.set_data(mask3d)
                 self.view.draw()
@@ -538,15 +541,18 @@ class PlotSuperPixelMask(QWidget):
         global max_num_iter
         global min_size_factor
         global max_size_factor
+        global selected_hu
         # apply SLIC and extract (approximately) the supplied number of segments
         segments_global = slic(dicom_image_array, n_segments=numSegments, sigma=sigma_slic, \
                         channel_axis=None, compactness=compactness, start_label=1, max_num_iter=max_num_iter, min_size_factor=min_size_factor, max_size_factor=max_size_factor)
+        
+        segments_global[dicom_image_array < 20] = 0
         self.axes.clear()
         self.axes.set_title("Máscara/SuperPixel")
         if(not np.array_equal(mask3d, [])):
-                self.im = self.axes.imshow(mark_boundaries(mask3d, segments_global))
+                self.im = self.axes.imshow(mark_boundaries(mask3d, segments_global*selected_hu))
         else:
-                self.im = self.axes.imshow(mark_boundaries(dicom_image_array/255, segments_global), cmap='gray')
+                self.im = self.axes.imshow(mark_boundaries(dicom_image_array/255, segments_global*selected_hu), cmap='gray')
         self.view.draw()
         
         superpixel_auth = True
@@ -746,6 +752,9 @@ class ImageViewer(QMainWindow):
         global currentTissue
         global masks
         global segmentedMask
+        global selected_hu
+        global fat_hu
+        global muscle_hu
         color = QColorDialog.getColor(Qt.black, self)
         qcolor = QColor(color)
         if qcolor.red() != 0 or qcolor.green() != 0 or qcolor.blue() != 0:
@@ -790,6 +799,11 @@ class ImageViewer(QMainWindow):
                         informacoes["tissue"].append(dictTissues[item])            
                         currentTissue = size+1  
                         self.current_tissue.setText(item)
+            if informacoes["tissue"][currentTissue - 1] in [1, 2, 3]:
+                selected_hu = fat_hu
+            elif informacoes["tissue"][currentTissue - 1] in [5]:
+                selected_hu = muscle_hu
+            self.plotsuperpixelmask.UpdateView()
 
     def set_color(self, color: QColor = Qt.black):
         """ Changes the color icon for the selected """
@@ -844,6 +858,7 @@ class ImageViewer(QMainWindow):
         global area
         global fat_hu
         global muscle_hu
+        global selected_hu
         previous_segments = {"superpixel":[], "previous_identifier":[]}
         previous_paints = []
         fileName = self.pathFile()
@@ -880,6 +895,7 @@ class ImageViewer(QMainWindow):
                 # Obter os valores na leitura de imagem no diretório
                 muscle_hu = tissue_segmentation(select_RoI(dicom_image_array), "muscle")
                 fat_hu = tissue_segmentation(select_RoI(dicom_image_array), "fat")
+                selected_hu = np.ones((dicom_image_array.shape))
                 
                 dicom_image_array =  ConvertToUint8(dicom_image_array)
                 area = np.count_nonzero(ConvertToUint8(select_RoI(dicom2array(pydicom.dcmread(fileName_global, force=True)))))
@@ -912,6 +928,10 @@ class ImageViewer(QMainWindow):
                     currentTissue = 1
                     self.current_tissue.setText(item)
                     self.set_color(Qt.yellow)
+                    if informacoes["tissue"][currentTissue - 1] in [1, 2, 3]:
+                        selected_hu = fat_hu
+                    elif informacoes["tissue"][currentTissue - 1] in [5]:
+                        selected_hu = muscle_hu
                     imageViewer.plotsuperpixelmask.UpdateView()
                 csvFlag = False
     def pathFile(self):
@@ -928,7 +948,6 @@ class ImageViewer(QMainWindow):
         global mask3d
         global radio_density_check_enabled
         self.resetToggleState()
-        radio_density_check_enabled = False
 
         if not np.array_equal(dicom_image_array, []):
             if(masks_empty == True):
@@ -950,7 +969,6 @@ class ImageViewer(QMainWindow):
         if not np.array_equal(dicom_image_array, []):
             self.plotsuperpixelmask.SuperPixel()
             toggle_available = True
-            radio_density_check_enabled = False
 
     def toggleRadioDensityCheck(self):
         global dicom_image_array, radio_density_check_enabled
@@ -965,7 +983,6 @@ class ImageViewer(QMainWindow):
         global radio_density_check_enabled
         # self.plotwidget_original.ResetDicom()
         self.resetToggleState()
-        radio_density_check_enabled = False
 
         if fileName_global != '':
             if not fileName_global.split(".")[1] == "csv":
@@ -986,7 +1003,6 @@ class ImageViewer(QMainWindow):
         global radio_density_check_enabled
         # self.plotwidget_original.DeleteObjects()
         self.resetToggleState()
-        radio_density_check_enabled = False
 
         if not np.array_equal(dicom_image_array, []):
             if(masks_empty == True):
@@ -1007,7 +1023,6 @@ class ImageViewer(QMainWindow):
             global radio_density_check_enabled
             # self.plotwidget_original.DeleteObjects()
             self.resetToggleState()
-            radio_density_check_enabled = False
 
             if not np.array_equal(dicom_image_array, []):
                 if(masks_empty == True):
