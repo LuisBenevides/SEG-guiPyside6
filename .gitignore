@@ -5,3 +5,6 @@ images
 *.spec
 defaultImageDir.txt
 defaultMaskDir.txt
+venv/
+__pycache__/
+__pycache__/functions.cpython-310.pyc
